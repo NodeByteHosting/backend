@@ -1,6 +1,6 @@
 # NodeByte Backend API
 
-**v0.1.0** — High-performance REST API and background job processing service for NodeByte infrastructure management.
+REST API and background job processing service for NodeByte infrastructure management.
 
 [![Go Version](https://img.shields.io/badge/go-1.23+-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-AGPL%203.0-green.svg)](LICENSE)
