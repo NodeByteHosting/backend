@@ -1,0 +1,681 @@
+basePath: /
+definitions:
+  handlers.DispatchWebhookRequest:
+    properties:
+      data:
+        additionalProperties: true
+        type: object
+      event:
+        type: string
+    type: object
+  handlers.ErrorResponse:
+    properties:
+      code:
+        type: string
+      error:
+        type: string
+      success:
+        type: boolean
+    type: object
+  handlers.QueueEmailRequest:
+    properties:
+      data:
+        additionalProperties:
+          type: string
+        type: object
+      subject:
+        type: string
+      template:
+        type: string
+      to:
+        type: string
+    type: object
+  handlers.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  handlers.TriggerFullSyncRequest:
+    properties:
+      requested_by:
+        type: string
+      skip_users:
+        type: boolean
+    type: object
+  handlers.TriggerSyncAdminRequest:
+    properties:
+      type:
+        type: string
+    type: object
+  handlers.UpdateSyncSettingsAdminRequest:
+    properties:
+      autoSyncEnabled:
+        type: boolean
+      autoSyncInterval:
+        type: integer
+    type: object
+host: core.nodebyte.host
+info:
+  contact:
+    name: Contact Support
+    url: https://discord.gg/wN58bTzzpW
+  description: Comprehensive REST API for managing game server infrastructure with
+    panel integration, async job queue management, and real-time sync operations
+  license:
+    name: AGPL 3.0
+    url: https://www.gnu.org/licenses/agpl-3.0.en.html
+  termsOfService: https://nodebyte.co.uk/legal/terms
+  title: NodeByte API
+  version: 0.1.0
+paths:
+  /api/admin/stats:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves comprehensive statistics for admin dashboard
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Admin statistics retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get admin statistics
+      tags:
+      - Admin
+  /api/admin/sync:
+    post:
+      consumes:
+      - application/json
+      description: Triggers a synchronization operation with specified type
+      parameters:
+      - description: Sync trigger parameters
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.TriggerSyncAdminRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Sync queued successfully
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Invalid sync type
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Trigger sync (admin)
+      tags:
+      - Admin
+  /api/admin/sync/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Requests cancellation of the currently running sync operation
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Cancellation requested
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Sync cannot be cancelled
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: No active sync found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Cancel sync (admin)
+      tags:
+      - Admin
+  /api/admin/sync/logs:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves paginated sync operation logs with full details
+      parameters:
+      - default: 20
+        description: Limit results (default 20)
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset for pagination (default 0)
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      - description: Filter by sync type
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Sync logs retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get sync logs (admin)
+      tags:
+      - Admin
+  /api/admin/sync/settings:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves current sync automation settings
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Settings retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get sync settings (admin)
+      tags:
+      - Admin
+    post:
+      consumes:
+      - application/json
+      description: Updates sync automation settings (enabled status and interval)
+      parameters:
+      - description: Settings update parameters
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateSyncSettingsAdminRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Settings updated
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update sync settings (admin)
+      tags:
+      - Admin
+  /api/panel/counts:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves counts of all manageable resources for the panel (no
+        authentication required)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Panel counts retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get panel resource counts
+      tags:
+      - Public
+  /api/stats:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves publicly available system statistics (no authentication
+        required)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Public statistics retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get public statistics
+      tags:
+      - Public
+  /api/v1/email/queue:
+    post:
+      consumes:
+      - application/json
+      description: Queues an email message for asynchronous sending
+      parameters:
+      - description: Email request parameters
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.QueueEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Email queued successfully
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Queue email
+      tags:
+      - Email
+  /api/v1/queues/stats:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves statistics about job queues
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Queue statistics retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get queue statistics
+      tags:
+      - Queues
+  /api/v1/stats/overview:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves aggregate statistics for all resources in the system
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: System statistics retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get system overview
+      tags:
+      - Stats
+  /api/v1/stats/servers:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves server count statistics grouped by status and node
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Server statistics retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get server statistics
+      tags:
+      - Stats
+  /api/v1/stats/users:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves user statistics including active, migrated, and admin
+        counts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User statistics retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get user statistics
+      tags:
+      - Stats
+  /api/v1/sync/cancel/{id}:
+    post:
+      consumes:
+      - application/json
+      description: Requests cancellation of a running sync by ID
+      parameters:
+      - description: Sync log ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Cancellation requested
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Cancel sync operation
+      tags:
+      - Sync
+  /api/v1/sync/full:
+    post:
+      consumes:
+      - application/json
+      description: Initiates a complete synchronization of all resources (locations,
+        nodes, allocations, nests, servers, databases, users)
+      parameters:
+      - description: Sync request parameters
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.TriggerFullSyncRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Sync queued successfully
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Trigger full sync
+      tags:
+      - Sync
+  /api/v1/sync/latest:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the most recent sync operation for each sync type
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Latest syncs retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get latest syncs
+      tags:
+      - Sync
+  /api/v1/sync/locations:
+    post:
+      consumes:
+      - application/json
+      description: Synchronizes only location data from Pterodactyl panel
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Sync queued successfully
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Trigger locations sync
+      tags:
+      - Sync
+  /api/v1/sync/logs:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves paginated list of sync operation logs
+      parameters:
+      - default: 20
+        description: Limit results (default 20)
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset for pagination (default 0)
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      - description: Filter by sync type (full, locations, nodes, servers, users)
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Sync logs retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get sync logs
+      tags:
+      - Sync
+  /api/v1/sync/nodes:
+    post:
+      consumes:
+      - application/json
+      description: Synchronizes only node data from Pterodactyl panel
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Sync queued successfully
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Trigger nodes sync
+      tags:
+      - Sync
+  /api/v1/sync/servers:
+    post:
+      consumes:
+      - application/json
+      description: Synchronizes only server data from Pterodactyl panel
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Sync queued successfully
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Trigger servers sync
+      tags:
+      - Sync
+  /api/v1/sync/status/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves detailed status and metadata of a specific sync operation
+      parameters:
+      - description: Sync log ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Sync status retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "404":
+          description: Sync not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get sync status
+      tags:
+      - Sync
+  /api/v1/sync/users:
+    post:
+      consumes:
+      - application/json
+      description: Synchronizes only user data from Pterodactyl panel
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Sync queued successfully
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Trigger users sync
+      tags:
+      - Sync
+  /api/v1/webhook/dispatch:
+    post:
+      consumes:
+      - application/json
+      description: Dispatches a webhook event to all configured webhooks that handle
+        the event type
+      parameters:
+      - description: Webhook dispatch parameters
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.DispatchWebhookRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Webhooks queued
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Dispatch webhook
+      tags:
+      - Webhooks
+schemes:
+- http
+- https
+securityDefinitions:
+  ApiKeyAuth:
+    description: Backend-to-backend API authentication
+    in: header
+    name: X-API-Key
+    type: apiKey
+swagger: "2.0"

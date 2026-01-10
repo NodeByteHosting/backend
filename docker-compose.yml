@@ -1,0 +1,92 @@
+version: '3.8'
+
+# NodeByte Backend v0.1.0
+# High-performance background job processing service
+# Docker composition for local development and production deployment
+
+services:
+  # Go Backend Service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: v0.1.0
+        BUILD_DATE: 2026-01-09
+    image: nodebyte/backend:v0.1.0
+    container_name: nodebyte-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      - ENV=${ENV:-production}
+      - BACKEND_PORT=8080
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - BACKEND_API_KEY=${BACKEND_API_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - PTERODACTYL_URL=${PTERODACTYL_URL}
+      - PTERODACTYL_API_KEY=${PTERODACTYL_API_KEY}
+      - PTERODACTYL_CLIENT_API_KEY=${PTERODACTYL_CLIENT_API_KEY}
+      - VIRTFUSION_URL=${VIRTFUSION_URL}
+      - VIRTFUSION_API_KEY=${VIRTFUSION_API_KEY}
+      - CF_ACCESS_CLIENT_ID=${CF_ACCESS_CLIENT_ID}
+      - CF_ACCESS_CLIENT_SECRET=${CF_ACCESS_CLIENT_SECRET}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM:-NodeByte <noreply@nodebyte.host>}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - AUTO_SYNC_ENABLED=${AUTO_SYNC_ENABLED:-false}
+      - AUTO_SYNC_INTERVAL=${AUTO_SYNC_INTERVAL:-3600}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - nodebyte
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Redis for job queue
+  redis:
+    image: redis:7-alpine
+    container_name: nodebyte-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - nodebyte
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Asynq Web UI (optional - for monitoring)
+  asynqmon:
+    image: hibiken/asynqmon:latest
+    container_name: nodebyte-asynqmon
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - redis
+    networks:
+      - nodebyte
+    profiles:
+      - monitoring
+
+networks:
+  nodebyte:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local
