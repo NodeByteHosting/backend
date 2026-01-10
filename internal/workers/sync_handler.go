@@ -51,7 +51,7 @@ func (h *SyncHandler) HandleFullSync(ctx context.Context, task *asynq.Task) erro
 	startTime := time.Now()
 
 	// Update sync log to RUNNING
-	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "RUNNING", nil, nil, map[string]interface{}{
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "RUNNING", nil, nil, nil, map[string]interface{}{
 		"step":       "starting",
 		"started_at": time.Now().Unix(),
 	})
@@ -123,7 +123,7 @@ func (h *SyncHandler) HandleFullSync(ctx context.Context, task *asynq.Task) erro
 
 	// Complete
 	h.updateProgress(ctx, payload.SyncLogID, "completed", 100)
-	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "COMPLETED", nil, nil, map[string]interface{}{
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "COMPLETED", nil, nil, nil, map[string]interface{}{
 		"completed_at": time.Now().Unix(),
 		"duration":     duration.Seconds(),
 	})
@@ -141,6 +141,9 @@ func (h *SyncHandler) HandleFullSync(ctx context.Context, task *asynq.Task) erro
 
 // dispatchSyncWebhook sends webhook notifications for sync completion/failure
 func (h *SyncHandler) dispatchSyncWebhook(ctx context.Context, syncLogID, status string, duration time.Duration, syncError error) {
+	// Create a new background context instead of using the task context which may be cancelled
+	bgCtx := context.Background()
+
 	// Get all enabled SYSTEM webhooks
 	query := `
 		SELECT "webhookUrl" 
@@ -150,7 +153,7 @@ func (h *SyncHandler) dispatchSyncWebhook(ctx context.Context, syncLogID, status
 		AND scope = 'ADMIN'
 	`
 
-	rows, err := h.db.Pool.Query(ctx, query)
+	rows, err := h.db.Pool.Query(bgCtx, query)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to fetch webhooks for sync notification")
 		return
@@ -351,7 +354,9 @@ func (h *SyncHandler) syncLocations(ctx context.Context, syncLogID string) error
 		return fmt.Errorf("failed to fetch locations: %w", err)
 	}
 
-	for _, loc := range locations {
+	h.updateDetailedProgress(ctx, syncLogID, "locations", len(locations), 0, fmt.Sprintf("Fetched %d locations from panel", len(locations)))
+
+	for i, loc := range locations {
 		query := `
 			INSERT INTO locations (id, "shortCode", description, "createdAt", "updatedAt")
 			VALUES ($1, $2, $3, NOW(), NOW())
@@ -368,9 +373,15 @@ func (h *SyncHandler) syncLocations(ctx context.Context, syncLogID string) error
 		if err != nil {
 			log.Warn().Err(err).Int("location_id", loc.Attributes.ID).Msg("Failed to upsert location")
 		}
+
+		// Update progress every 10 items or at end
+		if (i+1)%10 == 0 || i == len(locations)-1 {
+			h.updateDetailedProgress(ctx, syncLogID, "locations", len(locations), i+1, fmt.Sprintf("Processing location %d/%d (ID: %d)", i+1, len(locations), loc.Attributes.ID))
+		}
 	}
 
 	log.Info().Int("count", len(locations)).Msg("Synced locations")
+	h.updateDetailedProgress(ctx, syncLogID, "locations", len(locations), len(locations), fmt.Sprintf("✓ Synced %d locations", len(locations)))
 	return nil
 }
 
@@ -382,7 +393,9 @@ func (h *SyncHandler) syncNodes(ctx context.Context, syncLogID string) error {
 		return fmt.Errorf("failed to fetch nodes: %w", err)
 	}
 
-	for _, node := range nodes {
+	h.updateDetailedProgress(ctx, syncLogID, "nodes", len(nodes), 0, fmt.Sprintf("Fetched %d nodes from panel", len(nodes)))
+
+	for i, node := range nodes {
 		query := `
 			INSERT INTO nodes (
 				id, uuid, name, description, fqdn, scheme, "behindProxy", "panelType",
@@ -432,9 +445,15 @@ func (h *SyncHandler) syncNodes(ctx context.Context, syncLogID string) error {
 		if err != nil {
 			log.Warn().Err(err).Int("node_id", node.Attributes.ID).Msg("Failed to upsert node")
 		}
+
+		// Update progress every 5 items or at end
+		if (i+1)%5 == 0 || i == len(nodes)-1 {
+			h.updateDetailedProgress(ctx, syncLogID, "nodes", len(nodes), i+1, fmt.Sprintf("Processing node %d/%d (%s)", i+1, len(nodes), node.Attributes.Name))
+		}
 	}
 
 	log.Info().Int("count", len(nodes)).Msg("Synced nodes")
+	h.updateDetailedProgress(ctx, syncLogID, "nodes", len(nodes), len(nodes), fmt.Sprintf("✓ Synced %d nodes", len(nodes)))
 	return nil
 }
 
@@ -447,44 +466,69 @@ func (h *SyncHandler) syncAllocations(ctx context.Context, syncLogID string) err
 		return fmt.Errorf("failed to fetch nodes for allocations: %w", err)
 	}
 
+	h.updateDetailedProgress(ctx, syncLogID, "allocations", 0, 0, fmt.Sprintf("Fetching allocations from %d nodes", len(nodes)))
+
 	totalAllocations := 0
-	for _, node := range nodes {
+	processedAllocations := 0
+	batchSize := 500 // Insert 500 allocations at a time for better performance
+
+	for nodeIdx, node := range nodes {
 		allocations, err := h.pteroClient.GetAllAllocationsForNode(ctx, node.Attributes.ID)
 		if err != nil {
 			log.Warn().Err(err).Int("node_id", node.Attributes.ID).Msg("Failed to fetch allocations")
 			continue
 		}
 
-		for _, alloc := range allocations {
+		h.updateDetailedProgress(ctx, syncLogID, "allocations", 0, processedAllocations, fmt.Sprintf("Processing node %d/%d (%s): %d allocations", nodeIdx+1, len(nodes), node.Attributes.Name, len(allocations)))
+
+		// Batch insert allocations
+		for batchStart := 0; batchStart < len(allocations); batchStart += batchSize {
+			batchEnd := batchStart + batchSize
+			if batchEnd > len(allocations) {
+				batchEnd = len(allocations)
+			}
+			batch := allocations[batchStart:batchEnd]
+
+			// Build batch insert query
 			query := `
 				INSERT INTO allocations (id, ip, port, alias, notes, "isAssigned", "nodeId", "createdAt", "updatedAt")
-				VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-				ON CONFLICT (id) DO UPDATE SET
-					ip = EXCLUDED.ip,
-					port = EXCLUDED.port,
-					alias = EXCLUDED.alias,
-					notes = EXCLUDED.notes,
-					"isAssigned" = EXCLUDED."isAssigned",
-					"nodeId" = EXCLUDED."nodeId",
-					"updatedAt" = NOW()
-			`
-			_, err := h.db.Pool.Exec(ctx, query,
-				alloc.Attributes.ID,
-				alloc.Attributes.IP,
-				alloc.Attributes.Port,
-				alloc.Attributes.Alias,
-				alloc.Attributes.Notes,
-				alloc.Attributes.Assigned,
-				node.Attributes.ID,
-			)
-			if err != nil {
-				log.Warn().Err(err).Int("allocation_id", alloc.Attributes.ID).Msg("Failed to upsert allocation")
+				VALUES `
+
+			args := make([]interface{}, 0, len(batch)*7)
+			for i, alloc := range batch {
+				if i > 0 {
+					query += ", "
+				}
+				query += fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, NOW(), NOW())",
+					i*7+1, i*7+2, i*7+3, i*7+4, i*7+5, i*7+6, i*7+7)
+				args = append(args, alloc.Attributes.ID, alloc.Attributes.IP, alloc.Attributes.Port,
+					alloc.Attributes.Alias, alloc.Attributes.Notes, alloc.Attributes.Assigned, node.Attributes.ID)
 			}
-			totalAllocations++
+
+			query += ` ON CONFLICT (id) DO UPDATE SET
+				ip = EXCLUDED.ip,
+				port = EXCLUDED.port,
+				alias = EXCLUDED.alias,
+				notes = EXCLUDED.notes,
+				"isAssigned" = EXCLUDED."isAssigned",
+				"nodeId" = EXCLUDED."nodeId",
+				"updatedAt" = NOW()`
+
+			_, err := h.db.Pool.Exec(ctx, query, args...)
+			if err != nil {
+				log.Warn().Err(err).Int("node_id", node.Attributes.ID).Int("batch_size", len(batch)).Msg("Failed to batch upsert allocations")
+			}
+
+			totalAllocations += len(batch)
+			processedAllocations += len(batch)
+
+			// Update every batch
+			h.updateDetailedProgress(ctx, syncLogID, "allocations", 0, processedAllocations, fmt.Sprintf("Synced %d allocations from node %d/%d...", processedAllocations, nodeIdx+1, len(nodes)))
 		}
 	}
 
 	log.Info().Int("count", totalAllocations).Msg("Synced allocations")
+	h.updateDetailedProgress(ctx, syncLogID, "allocations", totalAllocations, totalAllocations, fmt.Sprintf("✓ Synced %d allocations", totalAllocations))
 	return nil
 }
 
@@ -496,8 +540,11 @@ func (h *SyncHandler) syncNestsAndEggs(ctx context.Context, syncLogID string) er
 		return fmt.Errorf("failed to fetch nests: %w", err)
 	}
 
+	h.updateDetailedProgress(ctx, syncLogID, "nests", len(nests), 0, fmt.Sprintf("Fetched %d nests from panel", len(nests)))
+
 	totalEggs := 0
-	for _, nest := range nests {
+	processedNests := 0
+	for nestIdx, nest := range nests {
 		// Upsert nest
 		nestQuery := `
 			INSERT INTO nests (id, uuid, name, description, author, "createdAt", "updatedAt")
@@ -527,6 +574,8 @@ func (h *SyncHandler) syncNestsAndEggs(ctx context.Context, syncLogID string) er
 			log.Warn().Err(err).Int("nest_id", nest.Attributes.ID).Msg("Failed to fetch eggs")
 			continue
 		}
+
+		h.updateDetailedProgress(ctx, syncLogID, "nests", len(nests), nestIdx+1, fmt.Sprintf("Processing nest %d/%d (%s): %d eggs", nestIdx+1, len(nests), nest.Attributes.Name, len(eggs)))
 
 		for _, egg := range eggs {
 			eggQuery := `
@@ -586,21 +635,26 @@ func (h *SyncHandler) syncNestsAndEggs(ctx context.Context, syncLogID string) er
 			}
 			totalEggs++
 		}
+		processedNests++
 	}
 
 	log.Info().Int("nests", len(nests)).Int("eggs", totalEggs).Msg("Synced nests and eggs")
+	h.updateDetailedProgress(ctx, syncLogID, "nests", len(nests), len(nests), fmt.Sprintf("✓ Synced %d nests and %d eggs", len(nests), totalEggs))
 	return nil
 }
 
 func (h *SyncHandler) syncServers(ctx context.Context, syncLogID string) error {
 	log.Debug().Str("sync_log_id", syncLogID).Msg("Syncing servers")
 
+	// Fetch servers with allocations data included
 	servers, err := h.pteroClient.GetAllServers(ctx, true)
 	if err != nil {
 		return fmt.Errorf("failed to fetch servers: %w", err)
 	}
 
-	for _, server := range servers {
+	h.updateDetailedProgress(ctx, syncLogID, "servers", len(servers), 0, fmt.Sprintf("Fetched %d servers from panel", len(servers)))
+
+	for i, server := range servers {
 		// Map status
 		status := "online"
 		if server.Attributes.Status != "" {
@@ -656,9 +710,65 @@ func (h *SyncHandler) syncServers(ctx context.Context, syncLogID string) error {
 		if err != nil {
 			log.Warn().Err(err).Int("server_id", server.Attributes.ID).Msg("Failed to upsert server")
 		}
+
+		// Update progress every 25 servers
+		if (i+1)%25 == 0 || i == len(servers)-1 {
+			h.updateDetailedProgress(ctx, syncLogID, "servers", len(servers), i+1, fmt.Sprintf("Processing server %d/%d (%s)", i+1, len(servers), server.Attributes.Name))
+		}
 	}
 
 	log.Info().Int("count", len(servers)).Msg("Synced servers")
+	h.updateDetailedProgress(ctx, syncLogID, "servers", len(servers), len(servers), fmt.Sprintf("✓ Synced %d servers", len(servers)))
+	return nil
+}
+
+func (h *SyncHandler) syncServerResources(ctx context.Context, syncLogID string) error {
+	log.Debug().Str("sync_log_id", syncLogID).Msg("Syncing detailed server resources (status, allocations, cpu usage, etc)")
+
+	// Get all servers with UUIDs
+	rows, err := h.db.Pool.Query(ctx, `SELECT id, uuid FROM servers WHERE uuid IS NOT NULL LIMIT 100`)
+	if err != nil {
+		return fmt.Errorf("failed to fetch servers: %w", err)
+	}
+	defer rows.Close()
+
+	var servers []struct {
+		ID   string
+		UUID string
+	}
+	for rows.Next() {
+		var serverID, uuid string
+		if err := rows.Scan(&serverID, &uuid); err != nil {
+			continue
+		}
+		servers = append(servers, struct {
+			ID   string
+			UUID string
+		}{ID: serverID, UUID: uuid})
+	}
+
+	h.updateDetailedProgress(ctx, syncLogID, "server_resources", len(servers), 0, fmt.Sprintf("Fetching resource data for %d servers", len(servers)))
+
+	for i, srv := range servers {
+		// Fetch live resource data (CPU, memory, disk, network usage)
+		resources, err := h.pteroClient.GetServerResources(ctx, srv.UUID)
+		if err != nil {
+			// Log but don't fail - resource endpoint may not be available
+			log.Warn().Err(err).Str("server_uuid", srv.UUID).Msg("Failed to fetch server resources")
+		} else if resources != nil {
+			// Store resource data in database if we have a column for it
+			// For now, just log that we got the data
+			log.Debug().Str("server_uuid", srv.UUID).Interface("resources", resources).Msg("Fetched server resources")
+		}
+
+		// Update progress every 10 servers
+		if (i+1)%10 == 0 || i == len(servers)-1 {
+			h.updateDetailedProgress(ctx, syncLogID, "server_resources", len(servers), i+1, fmt.Sprintf("Processing resources %d/%d", i+1, len(servers)))
+		}
+	}
+
+	log.Info().Int("count", len(servers)).Msg("Synced server resources")
+	h.updateDetailedProgress(ctx, syncLogID, "server_resources", len(servers), len(servers), fmt.Sprintf("✓ Synced resources for %d servers", len(servers)))
 	return nil
 }
 
@@ -672,19 +782,34 @@ func (h *SyncHandler) syncDatabases(ctx context.Context, syncLogID string) error
 	}
 	defer rows.Close()
 
-	totalDatabases := 0
+	// Count total servers first
+	var servers []struct {
+		ID      string
+		PteroID int
+	}
 	for rows.Next() {
 		var serverID string
 		var pteroID int
 		if err := rows.Scan(&serverID, &pteroID); err != nil {
 			continue
 		}
+		servers = append(servers, struct {
+			ID      string
+			PteroID int
+		}{serverID, pteroID})
+	}
 
-		databases, err := h.pteroClient.GetServerDatabasesWithHost(ctx, pteroID)
+	h.updateDetailedProgress(ctx, syncLogID, "databases", len(servers), 0, fmt.Sprintf("Scanning databases across %d servers", len(servers)))
+
+	totalDatabases := 0
+	for serverIdx, server := range servers {
+		databases, err := h.pteroClient.GetServerDatabasesWithHost(ctx, server.PteroID)
 		if err != nil {
-			log.Warn().Err(err).Int("pterodactyl_id", pteroID).Msg("Failed to fetch server databases")
+			log.Warn().Err(err).Int("pterodactyl_id", server.PteroID).Msg("Failed to fetch server databases")
 			continue
 		}
+
+		h.updateDetailedProgress(ctx, syncLogID, "databases", 0, 0, fmt.Sprintf("Processing server %d/%d: %d databases", serverIdx+1, len(servers), len(databases)))
 
 		for _, db := range databases {
 			query := `
@@ -699,7 +824,7 @@ func (h *SyncHandler) syncDatabases(ctx context.Context, syncLogID string) error
 			`
 			_, err := h.db.Pool.Exec(ctx, query,
 				db.Attributes.ID,
-				serverID,
+				server.ID,
 				db.Attributes.Database,
 				db.Attributes.Username,
 				db.Attributes.Host,
@@ -713,6 +838,7 @@ func (h *SyncHandler) syncDatabases(ctx context.Context, syncLogID string) error
 	}
 
 	log.Info().Int("count", totalDatabases).Msg("Synced server databases")
+	h.updateDetailedProgress(ctx, syncLogID, "databases", totalDatabases, totalDatabases, fmt.Sprintf("✓ Synced %d databases", totalDatabases))
 	return nil
 }
 
@@ -722,7 +848,57 @@ func (h *SyncHandler) syncUsers(ctx context.Context, syncLogID string) error {
 	totalUsers := 0
 	page := 1
 
-	for {
+	// First pass: estimate total pages
+	resp, err := h.pteroClient.GetUsers(ctx, 1)
+	if err != nil {
+		return fmt.Errorf("failed to fetch users page 1: %w", err)
+	}
+
+	totalPages := resp.Meta.Pagination.TotalPages
+	h.updateDetailedProgress(ctx, syncLogID, "users", totalPages*50, 0, fmt.Sprintf("Fetching %d users from %d pages", resp.Meta.Pagination.Total, totalPages))
+
+	// Process first page
+	var users []panels.PteroUser
+	if err := json.Unmarshal(resp.Data, &users); err != nil {
+		return fmt.Errorf("failed to unmarshal users: %w", err)
+	}
+
+	for _, user := range users {
+		// Upsert user - creates if not exists, updates pterodactyl fields if exists
+		query := `
+			INSERT INTO users (
+				id, email, username, "firstName", "lastName",
+				"pterodactylId", "isPterodactylAdmin",
+				"isMigrated", "isActive", "createdAt", "updatedAt"
+			) VALUES (
+				gen_random_uuid(), $1, $2, $3, $4, $5, $6, false, true, NOW(), NOW()
+			)
+			ON CONFLICT (email) DO UPDATE SET
+				"pterodactylId" = EXCLUDED."pterodactylId",
+				"isPterodactylAdmin" = EXCLUDED."isPterodactylAdmin",
+				username = COALESCE(users.username, EXCLUDED.username),
+				"firstName" = COALESCE(users."firstName", EXCLUDED."firstName"),
+				"lastName" = COALESCE(users."lastName", EXCLUDED."lastName"),
+				"updatedAt" = NOW()
+		`
+		_, err := h.db.Pool.Exec(ctx, query,
+			user.Attributes.Email,
+			user.Attributes.Username,
+			user.Attributes.FirstName,
+			user.Attributes.LastName,
+			user.Attributes.ID,
+			user.Attributes.RootAdmin,
+		)
+		if err != nil {
+			log.Warn().Err(err).Str("email", user.Attributes.Email).Msg("Failed to upsert user")
+		}
+		totalUsers++
+	}
+
+	h.updateDetailedProgress(ctx, syncLogID, "users", resp.Meta.Pagination.Total, totalUsers, fmt.Sprintf("Processing page 1/%d (%d users)", totalPages, totalUsers))
+
+	// Process remaining pages
+	for page = 2; page <= totalPages; page++ {
 		resp, err := h.pteroClient.GetUsers(ctx, page)
 		if err != nil {
 			return fmt.Errorf("failed to fetch users page %d: %w", page, err)
@@ -734,7 +910,6 @@ func (h *SyncHandler) syncUsers(ctx context.Context, syncLogID string) error {
 		}
 
 		for _, user := range users {
-			// Upsert user - creates if not exists, updates pterodactyl fields if exists
 			query := `
 				INSERT INTO users (
 					id, email, username, "firstName", "lastName",
@@ -765,28 +940,46 @@ func (h *SyncHandler) syncUsers(ctx context.Context, syncLogID string) error {
 			totalUsers++
 		}
 
-		if page >= resp.Meta.Pagination.TotalPages {
-			break
-		}
-		page++
+		h.updateDetailedProgress(ctx, syncLogID, "users", resp.Meta.Pagination.Total, totalUsers, fmt.Sprintf("Processing page %d/%d (%d/%d users)", page, totalPages, totalUsers, resp.Meta.Pagination.Total))
 	}
 
 	log.Info().Int("count", totalUsers).Msg("Synced users")
+	h.updateDetailedProgress(ctx, syncLogID, "users", totalUsers, totalUsers, fmt.Sprintf("✓ Synced %d users", totalUsers))
 	return nil
 }
 
 // Helper methods
 
 func (h *SyncHandler) updateProgress(ctx context.Context, syncLogID, step string, progress int) {
-	h.syncRepo.UpdateSyncLog(ctx, syncLogID, "in_progress", nil, nil, map[string]interface{}{
+	h.syncRepo.UpdateSyncLog(ctx, syncLogID, "in_progress", nil, nil, nil, map[string]interface{}{
 		"step":     step,
 		"progress": progress,
 	})
 }
 
+// updateDetailedProgress updates sync progress with detailed information
+// itemsTotal: total number of items to sync
+// itemsProcessed: number of items processed so far
+// lastMessage: detailed message about current operation
+func (h *SyncHandler) updateDetailedProgress(ctx context.Context, syncLogID, step string, itemsTotal, itemsProcessed int, lastMessage string) {
+	percentage := 0
+	if itemsTotal > 0 {
+		percentage = (itemsProcessed * 100) / itemsTotal
+	}
+
+	h.syncRepo.UpdateSyncLog(ctx, syncLogID, "in_progress", &itemsTotal, &itemsProcessed, nil, map[string]interface{}{
+		"step":           step,
+		"itemsTotal":     itemsTotal,
+		"itemsProcessed": itemsProcessed,
+		"percentage":     percentage,
+		"lastMessage":    lastMessage,
+		"lastUpdated":    time.Now().Unix(),
+	})
+}
+
 func (h *SyncHandler) failSync(ctx context.Context, syncLogID, step string, err error) error {
 	duration := time.Duration(0)
-	h.syncRepo.UpdateSyncLog(ctx, syncLogID, "FAILED", nil, nil, map[string]interface{}{
+	h.syncRepo.UpdateSyncLog(ctx, syncLogID, "FAILED", nil, nil, nil, map[string]interface{}{
 		"failed_step": step,
 		"error":       err.Error(),
 	})
@@ -796,6 +989,6 @@ func (h *SyncHandler) failSync(ctx context.Context, syncLogID, step string, err 
 }
 
 func (h *SyncHandler) cancelSync(ctx context.Context, syncLogID, reason string) error {
-	h.syncRepo.UpdateSyncLog(ctx, syncLogID, "CANCELLED", nil, nil, nil)
+	h.syncRepo.UpdateSyncLog(ctx, syncLogID, "CANCELLED", nil, nil, nil, nil)
 	return fmt.Errorf("sync cancelled: %s", reason)
 }

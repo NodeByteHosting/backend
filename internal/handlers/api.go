@@ -249,7 +249,7 @@ func (h *SyncAPIHandler) CancelSync(c *fiber.Ctx) error {
 	}
 
 	// Update sync log to cancelling status
-	err := h.syncRepo.UpdateSyncLog(c.Context(), id, "cancelling", nil, nil, nil)
+	err := h.syncRepo.UpdateSyncLog(c.Context(), id, "cancelling", nil, nil, nil, nil)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Success: false,

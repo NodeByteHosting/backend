@@ -29,6 +29,22 @@ type User struct {
 	LastSyncedAt       sql.NullTime
 }
 
+// NewNullString creates a sql.NullString from a string value
+func NewNullString(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{String: "", Valid: false}
+	}
+	return sql.NullString{String: s, Valid: true}
+}
+
+// NewNullInt64 creates a sql.NullInt64 from an int64 value
+func NewNullInt64(i int64) sql.NullInt64 {
+	if i == 0 {
+		return sql.NullInt64{Int64: 0, Valid: false}
+	}
+	return sql.NullInt64{Int64: i, Valid: true}
+}
+
 // Location represents a data center location
 type Location struct {
 	ID          int
@@ -153,15 +169,15 @@ type ServerDatabase struct {
 
 // SyncLog represents a sync operation log
 type SyncLog struct {
-	ID          string    `json:"id"`
-	Type        string    `json:"type"`
-	Status      string    `json:"status"`
-	ItemsTotal  int       `json:"itemsTotal"`
-	ItemsSynced int       `json:"itemsSynced"`
-	ItemsFailed int       `json:"itemsFailed"`
-	Error       *string   `json:"error"`
-	Metadata    string    `json:"metadata"`
-	StartedAt   time.Time `json:"startedAt"`
+	ID          string     `json:"id"`
+	Type        string     `json:"type"`
+	Status      string     `json:"status"`
+	ItemsTotal  int        `json:"itemsTotal"`
+	ItemsSynced int        `json:"itemsSynced"`
+	ItemsFailed int        `json:"itemsFailed"`
+	Error       *string    `json:"error"`
+	Metadata    string     `json:"metadata"`
+	StartedAt   time.Time  `json:"startedAt"`
 	CompletedAt *time.Time `json:"completedAt"`
 }
 
@@ -201,11 +217,11 @@ type SetupStatus struct {
 // PteroUser represents a Pterodactyl user from API
 type PteroUser struct {
 	Attributes struct {
-		ID         int    `json:"id"`
-		Email      string `json:"email"`
-		Username   string `json:"username"`
-		FirstName  string `json:"first_name"`
-		LastName   string `json:"last_name"`
-		RootAdmin  bool   `json:"root_admin"`
+		ID        int    `json:"id"`
+		Email     string `json:"email"`
+		Username  string `json:"username"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		RootAdmin bool   `json:"root_admin"`
 	} `json:"attributes"`
 }

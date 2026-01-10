@@ -38,6 +38,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/nodebyte/backend/internal/config"
+	"github.com/nodebyte/backend/internal/crypto"
 	"github.com/nodebyte/backend/internal/database"
 	"github.com/nodebyte/backend/internal/handlers"
 	"github.com/nodebyte/backend/internal/queue"
@@ -74,12 +75,26 @@ func main() {
 
 	log.Info().Msg("Connected to PostgreSQL database")
 
+	// Create encryptor if encryption key is configured
+	var encryptor *crypto.Encryptor
+	encryptor, err = crypto.NewEncryptorFromEnv()
+	if err != nil {
+		log.Warn().Err(err).Msg("Encryption not configured; sensitive values stored unencrypted")
+	}
+
 	// Load system settings from database to override/populate config
-	if err := cfg.MergeFromDB(db); err != nil {
+	if err := cfg.MergeFromDB(db, encryptor); err != nil {
 		log.Warn().Err(err).Msg("Failed to load settings from database; using env values only")
 	} else {
 		log.Info().Msg("Loaded system settings from database")
 	}
+
+	// Debug: Log configuration state
+	log.Debug().
+		Str("pterodactyl_url", cfg.PterodactylURL).
+		Int("pterodactyl_api_key_len", len(cfg.PterodactylAPIKey)).
+		Int("pterodactyl_client_api_key_len", len(cfg.PterodactylClientAPIKey)).
+		Msg("Configuration initialized")
 
 	// Parse Redis URL and create Asynq client
 	// REDIS_URL format: redis://user:pass@host:port/db or host:port

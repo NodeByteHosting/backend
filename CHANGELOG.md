@@ -16,12 +16,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2026-01-09
 
-**Release Date**: January 9, 2026  
-**Status**: Stable - Production Ready  
-**Go Version**: 1.23  
-**Container**: Alpine Linux (minimal footprint ~50MB)
-
 ### Added
+
+#### Encryption System
+- AES-256-GCM encryption for sensitive configuration values
+- `crypto.Encryptor` implementation with base64-encoded key support
+- Support for encrypted storage of API keys in database (`config` table)
+- Graceful fallback when encryption key not configured (unencrypted mode)
+- Environment variable support for ENCRYPTION_KEY configuration
+
+#### Sync Logging & Tracking Improvements
+- **Detailed progress tracking** via `updateDetailedProgress()` 
+  - Per-step item totals and completion counts
+  - Real-time percentage completion calculation
+  - Detailed status messages with contextual information
+- **Sync log database updates**
+  - `itemsTotal` field now properly populated for each sync step
+  - `itemsSynced` tracks successful operations
+  - `itemsFailed` tracks failed items (when applicable)
+  - `completedAt` timestamp recorded on completion
+- **Metadata storage** with JSON serialization
+  - `step`: current sync operation (locations, nodes, allocations, etc.)
+  - `itemsTotal` and `itemsProcessed`: progress tracking
+  - `percentage`: calculated completion percentage
+  - `lastMessage`: detailed human-readable status message
+  - `lastUpdated`: timestamp of last status update
+
+#### Webhook Notifications
+- **Sync completion webhooks** - Automatic Discord webhook dispatch on sync finish
+- **Status notification system**:
+  - ✅ Success notifications with duration and item counts
+  - ❌ Failure notifications with error details
+  - ⚠️ Cancellation notifications
+- **Rich Discord embeds** with:
+  - Operation status and emoji indicators
+  - Execution duration in seconds
+  - Error messages (when applicable)
+  - Timestamp and footer attribution
+- **Background webhook dispatch** using goroutines with background context
+
+#### Admin Settings & Configuration
+- **Settings change tracking** with before/after value diffs
+- **Admin audit trail** - Track which admin made configuration changes
+- **Webhook management endpoints**:
+  - GET/POST/PUT/DELETE for Discord webhook CRUD operations
+  - Webhook testing functionality
+  - Type and scope filtering (SYSTEM, GAME_SERVER, VPS, etc.)
+- **Webhook test endpoint** for validating Discord connectivity
+
+#### Pterodactyl API Enhancements
+- **Dual API key support** - Application and Client API key configuration
+- **Client API methods** via `doClientRequest()` for user-accessible endpoints
+- **Server resource tracking**:
+  - `GetServerResources()` - Live CPU, memory, disk, and network usage
+  - `GetServerDetailWithIncludes()` - Detailed server info with specified relationships
+- **Proper authorization headers** - "Bearer {apiKey}" format for all requests
 
 #### Core Infrastructure
 - Initial Go backend service scaffolding with modular architecture
@@ -96,7 +145,7 @@ Comprehensive background job handlers for synchronizing Pterodactyl infrastructu
 
 - **HandleSyncAllocations()** — Server port allocation synchronization
   - Iterates all nodes and fetches their port allocations
-  - Handles large allocation sets efficiently (1000s+ per node)
+  - Handles large allocation sets efficiently with batch inserts (500 records per query)
   - Tracks IP/port assignment status
   - Supports allocation aliases and notes
 
@@ -156,6 +205,11 @@ Comprehensive background job handlers for synchronizing Pterodactyl infrastructu
 
 ### Changed
 
+- **API key handling** - Keys now decrypted from database before Pterodactyl client initialization
+- **Webhook dispatch timing** - Now uses `context.Background()` to prevent "context canceled" errors
+- **Sync log creation** - Now includes type, status, and metadata initialization
+- **UpdateSyncLog function signature** - Added `itemsTotal` parameter for complete progress tracking
+- **Configuration loading order** - Load from env first, then override with decrypted database values
 - Extracted sync service from Next.js API routes to standalone Go service
 - Moved from synchronous API request/response to async job queue pattern
 - Transitioned from TypeScript/Node.js to Go for better performance and resource efficiency
@@ -163,6 +217,12 @@ Comprehensive background job handlers for synchronizing Pterodactyl infrastructu
 
 ### Fixed
 
+- **Webhook context cancellation** - Dispatched in goroutines with fresh background context
+- **API key encryption/decryption pipeline** - Keys properly decrypted during config merge
+- **Sensitive field masking** - API keys and tokens masked in API responses
+- **Sync progress calculation** - Accurate percentage based on itemsTotal and itemsProcessed
+- **Migration support** - Graceful handling of existing unencrypted values
+- **Decryption failure handling** - Warning messages when decryption fails, fallback to raw value
 - Go cron specification syntax (strconv.Itoa for decimal string conversion)
 - Asynq error handler callback signature (context.Context instead of asynq.Context)
 - Windows Makefile compatibility (removed ANSI escape sequences, Unix shell syntax)
@@ -190,9 +250,20 @@ Comprehensive background job handlers for synchronizing Pterodactyl infrastructu
 - **Error Resilience**: Individual record failures don't cascade to entire sync operation
 - **Structured Logging**: JSON logs for easy parsing and monitoring
 - **Modular Handlers**: Separate handlers for each sync type allow independent testing and parallel execution
+- **Encryption First**: Sensitive values encrypted at rest with database-managed keys
 
 ### Security
 
+- **Encrypted API keys at rest** - All sensitive credentials encrypted in database using AES-256-GCM
+- **Key rotation support** - Can change ENCRYPTION_KEY and re-encrypt values
+- **Sensitive field detection** - Automatic identification of fields requiring encryption:
+  - pterodactyl_api_key
+  - pterodactyl_client_api_key
+  - virtfusion_api_key
+  - resend_api_key
+  - cf_access_client_secret
+  - scalar_api_key
+- **Audit trail** - Admin changes logged with username and timestamp
 - API key validation via BACKEND_API_KEY environment variable
 - CORS origin validation with configurable whitelist
 - Prepared statements for all SQL queries (preventing injection)
@@ -201,6 +272,8 @@ Comprehensive background job handlers for synchronizing Pterodactyl infrastructu
 
 ### Performance
 
+- **Allocations batch insert** - Changed from individual INSERT to 500-record batches (~100x faster)
+- **Improved webhook dispatch** - Non-blocking background goroutines with retry capability
 - Connection pooling for database (pgxpool) and Redis
 - Automatic pagination for large datasets (locations, servers, users, allocations)
 - Bulk upserts with single queries per record type

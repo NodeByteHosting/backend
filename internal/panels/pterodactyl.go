@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -246,7 +247,7 @@ type PteroDatabase struct {
 	} `json:"attributes"`
 }
 
-// doRequest performs an HTTP request to the Pterodactyl API
+// doRequest performs an HTTP request to the Pterodactyl API using the application API key
 func (c *PterodactylClient) doRequest(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
 	url := fmt.Sprintf("%s/api/application%s", c.baseURL, path)
 
@@ -257,7 +258,47 @@ func (c *PterodactylClient) doRequest(ctx context.Context, method, path string, 
 
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	if c.apiKey == "" {
+		// Log warning if API key is empty
+		fmt.Printf("Warning: Application API key is empty\n")
+	} else {
+		// Log the length and first/last chars for debugging (never log full key)
+		keyLen := len(c.apiKey)
+		keyPreview := "***"
+		if keyLen > 8 {
+			keyPreview = c.apiKey[:4] + "..." + c.apiKey[keyLen-4:]
+		}
+		fmt.Printf("DEBUG: Sending request with API key (length: %d, preview: %s)\n", keyLen, keyPreview)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+	}
+
+	// Add Cloudflare Access headers if configured
+	if c.cfAccessClientID != "" {
+		req.Header.Set("CF-Access-Client-Id", c.cfAccessClientID)
+		req.Header.Set("CF-Access-Client-Secret", c.cfAccessSecret)
+	}
+
+	return c.httpClient.Do(req)
+}
+
+// doClientRequest performs an HTTP request to the Pterodactyl Client API using the client API key
+func (c *PterodactylClient) doClientRequest(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
+	if c.clientAPIKey == "" {
+		// Fall back to application API if client key not available
+		return c.doRequest(ctx, method, path, body)
+	}
+
+	url := fmt.Sprintf("%s/api/client%s", c.baseURL, path)
+
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.clientAPIKey))
 
 	// Add Cloudflare Access headers if configured
 	if c.cfAccessClientID != "" {
@@ -614,6 +655,56 @@ func (c *PterodactylClient) GetServerDatabasesWithHost(ctx context.Context, serv
 	}
 
 	return result.Data, nil
+}
+
+// GetServerResources fetches live resource usage for a specific server (requires client API key)
+// Returns CPU, memory, disk, and network usage data
+func (c *PterodactylClient) GetServerResources(ctx context.Context, serverUUID string) (map[string]interface{}, error) {
+	path := fmt.Sprintf("/servers/%s/resources", serverUUID)
+	resp, err := c.doClientRequest(ctx, "GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// GetServerDetailWithIncludes fetches detailed server info with specific includes (allocations, variables, etc)
+func (c *PterodactylClient) GetServerDetailWithIncludes(ctx context.Context, serverID int, includes []string) (*PteroServer, error) {
+	path := fmt.Sprintf("/servers/%d", serverID)
+	if len(includes) > 0 {
+		path += "?include=" + strings.Join(includes, ",")
+	}
+
+	resp, err := c.doRequest(ctx, "GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Object     string      `json:"object"`
+		Attributes PteroServer `json:"attributes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result.Attributes, nil
 }
 
 // getAllWithPagination is a helper to fetch all pages and merge results

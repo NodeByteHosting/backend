@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/nodebyte/backend/internal/crypto"
 	"github.com/nodebyte/backend/internal/database"
 )
 
@@ -124,7 +125,8 @@ func getEnvBool(key string, defaultValue bool) bool {
 // MergeFromDB loads configuration overrides from the `config` table in the
 // main application database. Values stored in the DB will overwrite the
 // corresponding fields on the provided Config when present.
-func (cfg *Config) MergeFromDB(db *database.DB) error {
+// Sensitive fields (API keys) will be decrypted if an encryptor is provided.
+func (cfg *Config) MergeFromDB(db *database.DB, encryptor *crypto.Encryptor) error {
 	ctx := context.Background()
 	rows, err := db.Pool.Query(ctx, `SELECT key, value FROM config`)
 	if err != nil {
@@ -132,11 +134,34 @@ func (cfg *Config) MergeFromDB(db *database.DB) error {
 	}
 	defer rows.Close()
 
+	// List of sensitive fields that may be encrypted
+	sensitiveFields := map[string]bool{
+		"pterodactyl_api_key":        true,
+		"pterodactyl_client_api_key": true,
+		"virtfusion_api_key":         true,
+		"resend_api_key":             true,
+		"cf_access_client_secret":    true,
+		"scalar_api_key":             true,
+	}
+
 	for rows.Next() {
 		var key string
 		var value string
 		if err := rows.Scan(&key, &value); err != nil {
 			continue
+		}
+
+		// Decrypt sensitive fields if encryptor is available
+		if isSensitive := sensitiveFields[key]; isSensitive && encryptor != nil {
+			if decrypted, err := encryptor.Decrypt(value); err == nil {
+				value = decrypted
+			} else {
+				// Decryption failed - log warning and try using raw value
+				// This can happen if ENCRYPTION_KEY is not set or key changed
+				fmt.Printf("WARNING: Failed to decrypt %s from database, using raw value: %v\n", key, err)
+			}
+		} else if isSensitive && encryptor == nil {
+			fmt.Printf("WARNING: Sensitive field '%s' in database but encryptor not available. Value may be encrypted.\n", key)
 		}
 
 		switch key {

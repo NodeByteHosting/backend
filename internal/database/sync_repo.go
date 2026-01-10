@@ -51,7 +51,7 @@ func (r *SyncRepository) CreateSyncLog(ctx context.Context, syncType, status str
 }
 
 // UpdateSyncLog updates a sync log entry
-func (r *SyncRepository) UpdateSyncLog(ctx context.Context, syncLogID, status string, itemsSynced, itemsFailed *int, metadata map[string]interface{}) error {
+func (r *SyncRepository) UpdateSyncLog(ctx context.Context, syncLogID, status string, itemsTotal, itemsSynced, itemsFailed *int, metadata map[string]interface{}) error {
 	var metadataJSON []byte
 	if metadata != nil {
 		var err error
@@ -63,6 +63,11 @@ func (r *SyncRepository) UpdateSyncLog(ctx context.Context, syncLogID, status st
 
 	query := `UPDATE sync_logs SET status = $2`
 	args := []interface{}{syncLogID, status}
+
+	if itemsTotal != nil {
+		query += `, "itemsTotal" = $` + string(rune(len(args)+1))
+		args = append(args, *itemsTotal)
+	}
 
 	if itemsSynced != nil {
 		query += `, "itemsSynced" = $` + string(rune(len(args)+1))

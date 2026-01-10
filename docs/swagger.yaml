@@ -38,6 +38,67 @@ definitions:
       success:
         type: boolean
     type: object
+  handlers.SystemSettings:
+    properties:
+      adminEmail:
+        description: Admin
+        type: string
+      autoSyncEnabled:
+        type: boolean
+      cacheTimeout:
+        description: Advanced
+        type: integer
+      crowdinPersonalToken:
+        type: string
+      crowdinProjectId:
+        description: Crowdin
+        type: string
+      discordNotifications:
+        description: Discord
+        type: boolean
+      discordWebhooks:
+        items: {}
+        type: array
+      emailNotifications:
+        description: Email
+        type: boolean
+      githubRepositories:
+        items:
+          type: string
+        type: array
+      githubToken:
+        description: GitHub
+        type: string
+      maintenanceMode:
+        type: boolean
+      pterodactylApi:
+        type: string
+      pterodactylApiKey:
+        type: string
+      pterodactylClientApiKey:
+        type: string
+      pterodactylUrl:
+        description: Pterodactyl
+        type: string
+      registrationEnabled:
+        description: Features
+        type: boolean
+      resendApiKey:
+        type: string
+      siteName:
+        type: string
+      siteUrl:
+        type: string
+      syncInterval:
+        type: integer
+      virtfusionApi:
+        type: string
+      virtfusionApiKey:
+        type: string
+      virtfusionUrl:
+        description: Virtfusion
+        type: string
+    type: object
   handlers.TriggerFullSyncRequest:
     properties:
       requested_by:
@@ -71,6 +132,446 @@ info:
   title: NodeByte API
   version: 0.1.0
 paths:
+  /api/admin/settings:
+    get:
+      description: Returns all configuration from Config table and Discord webhooks
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Settings retrieved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Get all admin settings
+      tags:
+      - Admin Settings
+    post:
+      consumes:
+      - application/json
+      description: Updates configuration in Config table and handles GitHub repos
+        merging
+      parameters:
+      - description: Settings to save
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SystemSettings'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Settings saved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Save admin settings
+      tags:
+      - Admin Settings
+    put:
+      consumes:
+      - application/json
+      description: Clears sensitive API keys and tokens
+      parameters:
+      - description: Keys to reset
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Settings reset successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Reset admin settings
+      tags:
+      - Admin Settings
+  /api/admin/settings/repos:
+    delete:
+      consumes:
+      - application/json
+      description: Removes a repository from tracking
+      parameters:
+      - description: Repository info
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Repository deleted
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Delete GitHub repository
+      tags:
+      - Admin Settings
+    get:
+      description: Returns list of tracked GitHub repositories
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Repositories list
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Get GitHub repositories
+      tags:
+      - Admin Settings
+    post:
+      consumes:
+      - application/json
+      description: Adds a new repository to track
+      parameters:
+      - description: Repository info
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Repository added
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid repository format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Add GitHub repository
+      tags:
+      - Admin Settings
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing repository entry
+      parameters:
+      - description: Old and new repository info
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Repository updated
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid repository format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Update GitHub repository
+      tags:
+      - Admin Settings
+  /api/admin/settings/test:
+    post:
+      consumes:
+      - application/json
+      description: Tests connection to Pterodactyl, Virtfusion, or Database
+      parameters:
+      - description: 'Connection type: pterodactyl, virtfusion, or database'
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Connection test result
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Test connection to external service
+      tags:
+      - Admin Settings
+  /api/admin/settings/webhooks:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a Discord webhook
+      parameters:
+      - description: Webhook id
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook deleted
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Delete webhook
+      tags:
+      - Admin Settings
+    get:
+      description: Returns list of configured Discord webhooks
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhooks retrieved
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Get webhooks
+      tags:
+      - Admin Settings
+    patch:
+      consumes:
+      - application/json
+      description: Tests webhook connectivity
+      parameters:
+      - description: Webhook id
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Test result
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Test webhook
+      tags:
+      - Admin Settings
+    post:
+      consumes:
+      - application/json
+      description: Creates a new Discord webhook for notifications
+      parameters:
+      - description: Webhook info
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Create webhook
+      tags:
+      - Admin Settings
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing Discord webhook
+      parameters:
+      - description: Webhook info
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook updated
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Update webhook
+      tags:
+      - Admin Settings
   /api/admin/stats:
     get:
       consumes:
@@ -93,6 +594,26 @@ paths:
       tags:
       - Admin
   /api/admin/sync:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves current sync status and recent stats
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Sync status retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get sync status (admin)
+      tags:
+      - Admin
     post:
       consumes:
       - application/json

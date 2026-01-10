@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -195,21 +196,42 @@ func (h *AdminSettingsHandler) SaveAdminSettings(c *fiber.Ctx) error {
 	}
 
 	if err := c.BodyParser(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to parse admin settings request body")
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"success": false,
-			"error":   "Invalid request body",
+			"error":   fmt.Sprintf("Invalid request body: %v", err),
 		})
 	}
 
+	// Get the admin user ID from context
+	userID, ok := c.Locals("userID").(string)
+	if !ok {
+		userID = "unknown"
+	}
+
+	// Get updated settings
+	configs, err := h.db.GetAllConfigs(c.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve current configs for comparison")
+		configs = make(map[string]string)
+	}
+	oldConfigs := configs
+
 	// Save all settings to Config
 	settingsMap := h.structToConfigMap(req.SystemSettings)
+	log.Debug().Interface("settingsMap", settingsMap).Msg("Prepared settings map for saving")
 
 	// Handle GitHub repositories merge
 	if req.GithubRepositoriesMerge && len(req.GithubRepositories) > 0 {
-		existingRaw, _ := h.db.GetConfig(c.Context(), "github_repositories")
+		existingRaw, err := h.db.GetConfig(c.Context(), "github_repositories")
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to get existing github repositories")
+		}
 		var existing []string
 		if existingRaw != "" {
-			json.Unmarshal([]byte(existingRaw), &existing)
+			if err := json.Unmarshal([]byte(existingRaw), &existing); err != nil {
+				log.Warn().Err(err).Str("raw", existingRaw).Msg("Failed to unmarshal existing github repositories")
+			}
 		}
 
 		// Merge and deduplicate
@@ -222,34 +244,64 @@ func (h *AdminSettingsHandler) SaveAdminSettings(c *fiber.Ctx) error {
 				seen[repo] = true
 			}
 		}
-		reposJSON, _ := json.Marshal(uniqueRepos)
+		reposJSON, err := json.Marshal(uniqueRepos)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to marshal github repositories")
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   fmt.Sprintf("Failed to marshal repositories: %v", err),
+			})
+		}
 		settingsMap["github_repositories"] = string(reposJSON)
 	} else if len(req.GithubRepositories) > 0 {
-		reposJSON, _ := json.Marshal(req.GithubRepositories)
+		reposJSON, err := json.Marshal(req.GithubRepositories)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to marshal github repositories")
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"success": false,
+				"error":   fmt.Sprintf("Failed to marshal repositories: %v", err),
+			})
+		}
 		settingsMap["github_repositories"] = string(reposJSON)
 	}
 
-	// Track changed fields for webhook notification
-	changedFields := []string{}
+	// Track changes: map of key -> {old: value, new: value}
+	changedFields := make(map[string]map[string]string)
 
 	// Save all configs
 	for key, value := range settingsMap {
+		oldValue := oldConfigs[key]
 		if err := h.db.SetConfig(c.Context(), key, value); err != nil {
+			log.Error().Err(err).Str("key", key).Msg("Failed to save config setting")
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 				"success": false,
-				"error":   fmt.Sprintf("Failed to save setting: %s", key),
+				"error":   fmt.Sprintf("Failed to save setting %s: %v", key, err),
 			})
 		}
-		// Track what changed for webhook
-		changedFields = append(changedFields, key)
+		// Track changes only if value actually changed
+		if oldValue != value {
+			changedFields[key] = map[string]string{
+				"old": oldValue,
+				"new": value,
+			}
+		}
 	}
 
+	log.Info().Str("userID", userID).Interface("changes", changedFields).Msg("Admin settings updated successfully")
+
 	// Get updated settings
-	configs, _ := h.db.GetAllConfigs(c.Context())
-	settings := h.configsToSettings(configs)
+	updatedConfigs, err := h.db.GetAllConfigs(c.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve updated configs after save")
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to retrieve updated settings: %v", err),
+		})
+	}
+	settings := h.configsToSettings(updatedConfigs)
 
 	// Dispatch webhook notification for settings update (non-blocking)
-	go h.dispatchSettingsUpdateWebhook(c.Context(), changedFields)
+	go h.dispatchSettingsUpdateWebhook(c.Context(), userID, changedFields)
 
 	return c.JSON(fiber.Map{
 		"success":  true,
@@ -796,9 +848,22 @@ func isValidRepoFormat(repo string) bool {
 }
 
 // dispatchSettingsUpdateWebhook sends webhook notifications for settings changes
-func (h *AdminSettingsHandler) dispatchSettingsUpdateWebhook(ctx context.Context, changedFields []string) {
+func (h *AdminSettingsHandler) dispatchSettingsUpdateWebhook(ctx context.Context, userID string, changedFields map[string]map[string]string) {
 	if len(changedFields) == 0 {
 		return
+	}
+
+	// Get user username and first name from database for display
+	var username, firstName sql.NullString
+	err := h.db.Pool.QueryRow(ctx, "SELECT username, \"firstName\" FROM users WHERE id = $1 LIMIT 1", userID).Scan(&username, &firstName)
+
+	displayName := userID
+	if err == nil {
+		if username.Valid && username.String != "" {
+			displayName = username.String
+		} else if firstName.Valid && firstName.String != "" {
+			displayName = firstName.String
+		}
 	}
 
 	// Get all enabled SYSTEM webhooks
@@ -830,6 +895,27 @@ func (h *AdminSettingsHandler) dispatchSettingsUpdateWebhook(ctx context.Context
 		return
 	}
 
+	// Build the changes field value
+	var changesText strings.Builder
+	for key, changes := range changedFields {
+		oldVal := changes["old"]
+		newVal := changes["new"]
+		if oldVal == "" {
+			oldVal = "(empty)"
+		}
+		if newVal == "" {
+			newVal = "(empty)"
+		}
+		// Truncate long values to 50 chars for display
+		if len(oldVal) > 50 {
+			oldVal = oldVal[:50] + "..."
+		}
+		if len(newVal) > 50 {
+			newVal = newVal[:50] + "..."
+		}
+		changesText.WriteString(fmt.Sprintf("• **%s**\n  `%s` → `%s`\n", key, oldVal, newVal))
+	}
+
 	// Prepare webhook payload
 	payload := map[string]interface{}{
 		"embeds": []map[string]interface{}{
@@ -839,14 +925,24 @@ func (h *AdminSettingsHandler) dispatchSettingsUpdateWebhook(ctx context.Context
 				"color":       3066993, // Green
 				"fields": []map[string]interface{}{
 					{
-						"name":   "Changed Fields",
-						"value":  strings.Join(changedFields, ", "),
+						"name":   "Modified By",
+						"value":  displayName,
+						"inline": true,
+					},
+					{
+						"name":   "Total Changes",
+						"value":  fmt.Sprintf("%d setting(s)", len(changedFields)),
+						"inline": true,
+					},
+					{
+						"name":   "Changed Settings",
+						"value":  changesText.String(),
 						"inline": false,
 					},
 					{
 						"name":   "Updated At",
 						"value":  time.Now().Format(time.RFC3339),
-						"inline": false,
+						"inline": true,
 					},
 				},
 				"timestamp": time.Now().Format(time.RFC3339),

@@ -16,10 +16,11 @@ func (db *DB) GetConfig(ctx context.Context, key string) (string, error) {
 
 // SetConfig sets a configuration value
 func (db *DB) SetConfig(ctx context.Context, key, value string) error {
+	// Use PostgreSQL's gen_random_uuid() for ID generation and NOW() for updatedAt
 	_, err := db.Pool.Exec(ctx, `
-		INSERT INTO config (key, value) 
-		VALUES ($1, $2)
-		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+		INSERT INTO config (id, key, value, "updatedAt") 
+		VALUES (gen_random_uuid()::text, $1, $2, NOW())
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()
 	`, key, value)
 	return err
 }
