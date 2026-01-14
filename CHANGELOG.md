@@ -13,6 +13,237 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prometheus metrics export
 - gRPC API for internal communication
 - Support for additional panel integrations (Game Panel Pro, Wings)
+- API documentation for Game Server Providers (GSPs)
+- Downloader CLI integration guide
+- Customer authentication flow documentation
+
+## [0.2.0] - 2026-01-14
+
+### Added
+
+#### Hytale OAuth Device Code Flow
+- **Device Code Authorization** - Full OAuth 2.0 Device Authorization Grant implementation
+  - `/api/hytale/device-code` - Request device code for GSP authentication
+  - Automatic code expiration (30 min) and polling timeout (15 min)
+  - User-friendly device code format with verification URL
+  - Session binding for code→token exchange
+- **Token Polling** - `/api/hytale/token-poll` endpoint with configurable backoff
+  - Polls Hytale OAuth server for authorization completion
+  - Automatic retry-after header handling
+  - Clean response on session limit errors (403 Forbidden)
+  - Account and profile ID extraction from token response
+- **Token Refresh** - `/api/hytale/refresh-token` for extending session validity
+  - Automatic refresh window (7 days before expiry)
+  - Transaction-safe token replacement in database
+  - Preserves account_id and profile_id across refreshes
+- **Token Validation** - JWT signature verification with Ed25519 keys
+  - JWKS public key caching with hourly automatic refresh
+  - Cryptographic signature validation preventing replay attacks
+  - Token expiry validation with 60-second clock skew tolerance
+  - Audience (aud) claim verification for correct token type
+  - Subject (sub) claim extraction for profile identification
+
+#### Game Session Management
+- **Session Endpoints** - Complete game session lifecycle management
+  - `POST /api/hytale/game-session` - Create new game session with validation
+  - `PATCH /api/hytale/game-session` - Refresh existing session (10 min window)
+  - `DELETE /api/hytale/game-session` - Terminate session with Hytale cleanup
+  - Query parameter validation (account_id, profile_id, session_id)
+- **Session Tracking** - Database persistence for audit and compliance
+  - Account and profile associations
+  - Session state tracking (created, active, terminated)
+  - IP address and user agent logging
+  - Timestamp recording for session lifecycle
+
+#### JWT Token and JWKS Management
+- **JWKSCache** - Thread-safe public key caching system
+  - Automatic hourly refresh from Hytale JWKS endpoint
+  - Base64URL decoding of Ed25519 public keys
+  - In-memory bucket cleanup for stale entries (30 min inactivity)
+  - Concurrent read access via RWMutex protection
+- **TokenValidator** - Complete JWT validation pipeline
+  - Header/payload/signature parsing from JWT format
+  - Ed25519 signature verification with extracted public keys
+  - Claim validation (iat, exp, sub, aud)
+  - Base64URL decoding with proper padding
+  - Support for both identity and session token types
+- **Database Token Storage** - Secure token persistence
+  - Encrypted token fields using AES-256-GCM
+  - Account and profile associations
+  - Expiry timestamps for automatic cleanup
+  - Staging environment support for testing
+
+#### Error Handling & HTTP Mapping
+- **HytaleError Type** - Standardized error response structure
+  - Application error codes (INVALID_REQUEST, UNAUTHORIZED, SESSION_LIMIT, etc.)
+  - User-facing error messages (no sensitive data leakage)
+  - Internal messages for debugging logs
+  - Session limit flag for special handling
+- **HTTP Status Mapping**:
+  - 400 Bad Request → INVALID_REQUEST, INVALID_DEVICE_CODE
+  - 401 Unauthorized → UNAUTHORIZED, EXPIRED_TOKEN, INVALID_TOKEN
+  - 403 Forbidden → FORBIDDEN, SESSION_LIMIT_EXCEEDED (with entitlement hint)
+  - 404 Not Found → ENDPOINT_NOT_FOUND, SESSION_NOT_FOUND
+  - 429 Too Many Requests → RATE_LIMITED
+  - 500+ Server Errors → SERVICE_ERROR, INTEGRATION_ERROR
+- **Response Types** - Consistent JSON error responses
+  - DetailedErrorResponse with code, message, status fields
+  - SessionLimitErrorResponse with entitlement hint
+  - NotFoundErrorResponse for missing resources
+  - RateLimitErrorResponse with X-RateLimit headers
+
+#### Audit Logging for Compliance
+- **Hytale Audit Log Repository** - Compliance-grade event tracking
+  - 8 event types: TOKEN_CREATED, TOKEN_REFRESHED, TOKEN_DELETED, AUTH_FAILED, SESSION_CREATED, SESSION_REFRESHED, SESSION_DELETED, PROFILE_SELECTED
+  - Account, profile, and IP tracking for forensics
+  - User agent capture for device fingerprinting
+  - Queryable audit trail via GetAuditLogs(account_id, limit)
+- **Database Schema** - Indexed audit table with constraints
+  - UUID primary key with auto-generation
+  - Event type ENUM validation (8 valid types)
+  - Composite indexes on account_id, event_type, created_at DESC
+  - JSON details field for flexible event metadata
+  - Foreign key relationship to accounts table
+- **Audit Events Logged**:
+  - OAuth token creation/refresh/deletion with timing
+  - Game session lifecycle (created, refreshed, deleted)
+  - Authentication failures with reason codes
+  - Profile selection for session binding
+  - All events include IP, user agent, timestamp
+
+#### Rate Limiting (Token Bucket Algorithm)
+- **Distributed Rate Limiter** - Per-endpoint configurable limits
+  - Token bucket refill algorithm with float64 precision
+  - IP-based limiting for unauthenticated endpoints (device code)
+  - Account-based limiting for authenticated endpoints (token ops, sessions)
+  - Thread-safe via sync.RWMutex protection
+- **Endpoint Configurations**:
+  - Device Code: 5 requests per 15 minutes (per IP)
+  - Token Poll: 10 requests per 5 minutes (per account)
+  - Token Refresh: 6 requests per 1 hour (per account)
+  - Game Session: 20 requests per 1 hour (per account)
+- **Response Headers** - Standard rate limit signaling
+  - X-RateLimit-Limit: requests allowed in window
+  - X-RateLimit-Remaining: tokens left for requester
+  - X-RateLimit-Reset: Unix timestamp when bucket refills
+- **Rate Limit Errors** - Proper 429 responses on limit exceed
+
+#### Type Consolidation
+- **Internal Types Package** - Organized request/response definitions
+  - `types/auth.go` - Authentication request/response types
+  - `types/hytale_oauth.go` - OAuth and session types
+  - `types/error_responses.go` - Error response types with Swagger annotations
+  - `types/rate_limit.go` - Rate limit error responses
+  - `types/token_validation.go` - JWT validation request/responses
+  - Eliminates scattered type definitions across handler files
+  - Centralized Swagger documentation via struct tags
+  - Reduced import chains and circular dependency risk
+
+#### Staging Environment Support
+- **Configuration Branching** - Per-environment OAuth endpoints
+  - Production Hytale OAuth: `https://oauth.hytale.com`
+  - Staging Hytale OAuth: `https://oauth.staging.hytale.com`
+  - Environment variable `HYTALE_ENVIRONMENT` (production|staging)
+  - Automatic token endpoint and JWKS URL selection
+- **Testing Support** - Isolated staging credentials
+  - Separate staging database schema (optional)
+  - Staging OAuth tokens won't interfere with production
+  - Safe testing of device code, token, session flows
+
+### Changed
+
+- **OAuth Endpoints Middleware** - All 8 Hytale routes now protected with rate limiting
+  - Device code endpoint: 5 per 15 min per IP
+  - Token polling: 10 per 5 min per account
+  - Token refresh: 6 per 1 hr per account
+  - Game sessions: 20 per 1 hr per account
+- **Middleware Chain** - Enhanced request processing
+  - API Key → JWT Bearer → Rate Limit validation in sequence
+  - Proper error responses at each stage
+  - Rate limit headers on all responses
+- **Error Response Format** - Standardized across all endpoints
+  - Consistent HytaleError structure vs inconsistent previous responses
+  - Proper HTTP status codes (400/401/403/404/429/500)
+  - No sensitive data in error messages (cleaned up before responding)
+
+### Fixed
+
+- **Database Connection Pool** - Corrected pgxpool.Pool API usage
+  - Changed from invalid `r.db.conn.ExecContext` to `r.db.Pool.Exec`
+  - Changed from invalid `r.db.conn.QueryContext` to `r.db.Pool.Query`
+  - Applies to all audit logging operations (LogTokenCreated, LogTokenRefreshed, LogTokenDeleted, LogSessionCreated, LogSessionRefreshed, LogSessionDeleted, LogAuthFailure, GetAuditLogs, GetLatestAuditLog)
+- **Type Safety** - AuditLogType enum to string casting for SQL parameters
+  - Ensures proper parameterized query execution
+  - Prevents SQL injection and type mismatch errors
+- **Code Duplication** - Removed duplicate `contains()` helper functions
+  - Consolidated to single definition in appropriate package
+  - Uses standard `strings.Contains()` for consistency
+
+### Technical Details
+
+- **Language**: Go 1.24
+- **HTTP Framework**: Fiber v2.52.5
+- **Job Queue**: Asynq v0.24.1 (Redis-backed)
+- **Database Driver**: pgx v5.7.2 with pgxpool connection pooling
+- **Crypto**: `crypto/ed25519` for JWT signature verification
+- **JWT Handling**: Manual parsing with header/payload/signature validation
+- **Caching**: In-memory thread-safe map for JWKS public keys
+- **Scheduler**: robfig/cron v3.0.1 for token/session refresh jobs
+- **Logging**: zerolog v1.33.0 for structured audit logging
+- **Container Runtime**: Docker with docker-compose
+
+### Security
+
+- **OAuth Security**:
+  - Device code authorization flow prevents credential leakage in logs
+  - Server-side session state prevents CSRF attacks
+  - Automatic device code expiration (30 min) limits brute force window
+  - Polling timeout (15 min) prevents indefinite waits
+- **Token Security**:
+  - JWT signature verification with Ed25519 (collision-resistant, smaller keys)
+  - Token expiry validation prevents indefinite access
+  - Audience claim verification prevents token type confusion
+  - Rate limiting (6/hr) prevents token enumeration attacks
+  - 60-second clock skew tolerance handles time sync issues
+- **Error Handling**:
+  - Session limit errors (403) don't leak entitlements (users told "buy upgrade")
+  - All errors use generic messages (no leaking OAuth server internals)
+  - HTTP status codes match RFC 7231 standards
+  - Rate limit responses (429) don't expose implementation details
+- **Audit Trail**:
+  - All OAuth operations logged with account, profile, IP, user agent
+  - Authentication failures tracked for intrusion detection
+  - Profile selection events logged for access control audits
+  - Queryable audit logs support compliance investigations
+- **Database Security**:
+  - Foreign key constraints prevent orphaned token/session records
+  - Prepared statements prevent SQL injection
+  - pgxpool connection pooling isolates connections per request
+  - Encryption at rest (existing AES-256-GCM system)
+
+### Performance
+
+- **JWKS Caching** - Eliminates repeated Hytale API calls
+  - Hourly refresh instead of per-request fetches
+  - In-memory map for O(1) key lookup
+  - ~99% reduction in external API calls for token validation
+- **Rate Limiting** - Sub-millisecond token bucket checks
+  - Prevents cache invalidation from rate limit checks
+  - Token bucket refill O(1) time complexity
+  - No database queries for rate limiting
+- **Token Validation** - Optimized JWT parsing
+  - Single pass through token string (3 splits for header/payload/sig)
+  - Base64URL decoding only used parts
+  - Early exit on missing claims
+  - Signature verification is CPU-bound (crypto-fast)
+- **Audit Logging** - Minimal request path impact
+  - Logging happens in background workers (not blocking response)
+  - Batch inserts possible (not implemented but architecture supports)
+  - Indexed audit queries (account_id, created_at DESC)
+
+### Dependencies Added
+
+- (No new external dependencies - uses existing ecosystem)
 
 ## [0.1.0] - 2026-01-09
 

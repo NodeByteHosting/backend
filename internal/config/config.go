@@ -54,6 +54,9 @@ type Config struct {
 	// Scalar (feature/config platform)
 	ScalarURL    string
 	ScalarAPIKey string
+
+	// Hytale OAuth
+	HytaleUseStaging bool
 }
 
 // Load reads configuration from environment variables
@@ -88,6 +91,9 @@ func Load() (*Config, error) {
 		// Scalar
 		ScalarURL:    os.Getenv("SCALAR_URL"),
 		ScalarAPIKey: os.Getenv("SCALAR_API_KEY"),
+
+		// Hytale
+		HytaleUseStaging: getEnvBool("HYTALE_USE_STAGING", false),
 	}
 
 	// Validate required fields

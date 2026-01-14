@@ -37,12 +37,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	_ "github.com/nodebyte/backend/docs"
 	"github.com/nodebyte/backend/internal/config"
 	"github.com/nodebyte/backend/internal/crypto"
 	"github.com/nodebyte/backend/internal/database"
 	"github.com/nodebyte/backend/internal/handlers"
 	"github.com/nodebyte/backend/internal/queue"
-	scalarclient "github.com/nodebyte/backend/internal/scalar"
 	"github.com/nodebyte/backend/internal/workers"
 )
 
@@ -116,9 +116,6 @@ func main() {
 	// Initialize queue manager
 	queueManager := queue.NewManager(asynqClient)
 
-	// Initialize Scalar client (optional)
-	scalarClient := scalarclient.NewClient(cfg.ScalarURL, cfg.ScalarAPIKey)
-
 	log.Info().Str("redis", cfg.RedisURL).Msg("Connected to Redis")
 
 	// Initialize Fiber app
@@ -144,18 +141,7 @@ func main() {
 	apiKeyMiddleware := handlers.NewAPIKeyMiddleware(cfg.APIKey)
 
 	// Setup routes
-	handlers.SetupRoutes(app, db, queueManager, apiKeyMiddleware)
-
-	// Lightweight test route for Scalar integration
-	app.Get("/scalar/test", func(c *fiber.Ctx) error {
-		ctx := c.Context()
-		// Try a lightweight request; path depends on Scalar API. Here we attempt root.
-		body, err := scalarClient.GetRaw(ctx, "/")
-		if err != nil {
-			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"ok": false, "error": err.Error()})
-		}
-		return c.JSON(fiber.Map{"ok": true, "scalar": body})
-	})
+	handlers.SetupRoutes(app, db, queueManager, apiKeyMiddleware, cfg)
 
 	// Start Asynq worker server in a goroutine
 	workerServer := workers.NewServer(redisOpt, db, cfg)
@@ -166,7 +152,7 @@ func main() {
 	}()
 
 	// Start scheduler for cron jobs
-	scheduler := workers.NewScheduler(redisOpt, cfg)
+	scheduler := workers.NewScheduler(db, redisOpt, cfg)
 	go func() {
 		if err := scheduler.Start(); err != nil {
 			log.Fatal().Err(err).Msg("Failed to start scheduler")

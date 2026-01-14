@@ -158,13 +158,11 @@ func (m *BearerAuthMiddleware) Handler() fiber.Handler {
 
 		if !isSystemAdmin {
 			log.Warn().Str("user_id", userID).Msg("Non-admin user attempted admin access")
-			// TODO: Re-enable this check after verifying auth works
-			// For now, allowing all authenticated users to bypass
-			// return c.Status(fiber.StatusForbidden).JSON(ErrorResponse{
-			// 	Success: false,
-			// 	Error:   "Admin access required",
-			// 	Code:    "FORBIDDEN",
-			// })
+			return c.Status(fiber.StatusForbidden).JSON(ErrorResponse{
+				Success: false,
+				Error:   "Admin access required",
+				Code:    "FORBIDDEN",
+			})
 		}
 
 		// Store user ID in context for handlers

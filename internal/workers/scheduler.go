@@ -1,6 +1,7 @@
 package workers
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/hibiken/asynq"
@@ -8,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/nodebyte/backend/internal/config"
+	"github.com/nodebyte/backend/internal/database"
 	"github.com/nodebyte/backend/internal/queue"
 )
 
@@ -16,16 +18,18 @@ type Scheduler struct {
 	cron        *cron.Cron
 	asynqClient *asynq.Client
 	cfg         *config.Config
+	db          *database.DB
 }
 
 // NewScheduler creates a new scheduler
-func NewScheduler(redisOpt asynq.RedisClientOpt, cfg *config.Config) *Scheduler {
+func NewScheduler(db *database.DB, redisOpt asynq.RedisClientOpt, cfg *config.Config) *Scheduler {
 	asynqClient := asynq.NewClient(redisOpt)
 
 	return &Scheduler{
 		cron:        cron.New(cron.WithSeconds()),
 		asynqClient: asynqClient,
 		cfg:         cfg,
+		db:          db,
 	}
 }
 
@@ -34,6 +38,7 @@ func (s *Scheduler) Start() error {
 	log.Info().Msg("Starting scheduler")
 
 	queueManager := queue.NewManager(s.asynqClient)
+	hytaleRefresher := NewHytaleRefresher(s.db, s.cfg.HytaleUseStaging)
 
 	// Auto-sync job (if enabled)
 	if s.cfg.AutoSyncEnabled {
@@ -64,8 +69,47 @@ func (s *Scheduler) Start() error {
 		}
 	}
 
+	// OAuth token refresh every 5 minutes
+	_, err := s.cron.AddFunc("@every 5m", func() {
+		log.Debug().Msg("Running OAuth token refresh")
+		if err := hytaleRefresher.RefreshOAuthTokens(context.Background()); err != nil {
+			log.Error().Err(err).Msg("Failed to refresh OAuth tokens")
+		}
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to schedule OAuth token refresh")
+	} else {
+		log.Info().Msg("Scheduled OAuth token refresh (every 5 minutes)")
+	}
+
+	// Game session refresh every 10 minutes
+	_, err = s.cron.AddFunc("@every 10m", func() {
+		log.Debug().Msg("Running game session refresh")
+		if err := hytaleRefresher.RefreshGameSessions(context.Background()); err != nil {
+			log.Error().Err(err).Msg("Failed to refresh game sessions")
+		}
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to schedule game session refresh")
+	} else {
+		log.Info().Msg("Scheduled game session refresh (every 10 minutes)")
+	}
+
+	// Game session cleanup daily at 2 AM
+	_, err = s.cron.AddFunc("0 0 2 * * *", func() {
+		log.Debug().Msg("Running game session cleanup")
+		if err := hytaleRefresher.CleanupExpiredSessions(context.Background()); err != nil {
+			log.Error().Err(err).Msg("Failed to cleanup expired game sessions")
+		}
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to schedule game session cleanup")
+	} else {
+		log.Info().Msg("Scheduled game session cleanup (daily at 2 AM)")
+	}
+
 	// Daily log cleanup at 3 AM
-	_, err := s.cron.AddFunc("0 0 3 * * *", func() {
+	_, err = s.cron.AddFunc("0 0 3 * * *", func() {
 		log.Info().Msg("Triggering daily log cleanup")
 		_, err := queueManager.EnqueueCleanupLogs(30) // Keep 30 days
 		if err != nil {

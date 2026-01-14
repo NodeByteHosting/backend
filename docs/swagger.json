@@ -1120,6 +1120,410 @@
                 }
             }
         },
+        "/api/v1/hytale/oauth/device-code": {
+            "post": {
+                "description": "Initiates OAuth 2.0 Device Code Flow for Hytale server authentication",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale OAuth"
+                ],
+                "summary": "Request Device Code",
+                "parameters": [
+                    {
+                        "description": "Device code request",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DeviceCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DeviceCodeResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/hytale/oauth/game-session/delete": {
+            "post": {
+                "description": "Terminates an active game session",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale OAuth"
+                ],
+                "summary": "Terminate Game Session",
+                "parameters": [
+                    {
+                        "description": "Terminate game session request",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TerminateGameSessionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TerminateGameSessionResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/hytale/oauth/game-session/new": {
+            "post": {
+                "description": "Creates a new game session for the selected profile",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale OAuth"
+                ],
+                "summary": "Create Game Session",
+                "parameters": [
+                    {
+                        "description": "Create game session request",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateGameSessionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateGameSessionResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Session limit reached",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Token or profile not found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/hytale/oauth/game-session/refresh": {
+            "post": {
+                "description": "Refreshes an existing game session to extend its lifetime",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale OAuth"
+                ],
+                "summary": "Refresh Game Session",
+                "parameters": [
+                    {
+                        "description": "Refresh game session request",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RefreshGameSessionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RefreshGameSessionResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/hytale/oauth/profiles": {
+            "post": {
+                "description": "Fetches available game profiles for the authenticated account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale OAuth"
+                ],
+                "summary": "Get Game Profiles",
+                "parameters": [
+                    {
+                        "description": "Get profiles request",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.GetProfilesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.GetProfilesResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Token not found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/hytale/oauth/refresh": {
+            "post": {
+                "description": "Exchanges refresh token for a new access token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale OAuth"
+                ],
+                "summary": "Refresh Access Token",
+                "parameters": [
+                    {
+                        "description": "Refresh token request",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RefreshTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TokenResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Token not found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/hytale/oauth/select-profile": {
+            "post": {
+                "description": "Selects a specific game profile for token operations",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale OAuth"
+                ],
+                "summary": "Select Game Profile",
+                "parameters": [
+                    {
+                        "description": "Select profile request",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SelectProfileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/hytale/oauth/token": {
+            "post": {
+                "description": "Polls Hytale OAuth endpoint to obtain access token after user authorization",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale OAuth"
+                ],
+                "summary": "Poll for Token",
+                "parameters": [
+                    {
+                        "description": "Token polling request",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.PollTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TokenResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/queues/stats": {
             "get": {
                 "security": [
@@ -1681,6 +2085,69 @@
         }
     },
     "definitions": {
+        "handlers.CreateGameSessionRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "string"
+                },
+                "profile_uuid": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CreateGameSessionResponseDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "session": {
+                    "$ref": "#/definitions/handlers.GameSessionDTO"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.DeviceCodeRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "Owner UUID from Hytale",
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.DeviceCodeResponseDTO": {
+            "type": "object",
+            "properties": {
+                "device_code": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "interval": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "user_code": {
+                    "type": "string"
+                },
+                "verification_uri": {
+                    "type": "string"
+                },
+                "verification_uri_complete": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.DispatchWebhookRequest": {
             "type": "object",
             "properties": {
@@ -1707,6 +2174,70 @@
                 }
             }
         },
+        "handlers.GameSessionDTO": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "identity_token": {
+                    "type": "string"
+                },
+                "session_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GetProfilesRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GetProfilesResponseDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "profiles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.ProfileDTO"
+                    }
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.PollTokenRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "string"
+                },
+                "device_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ProfileDTO": {
+            "type": "object",
+            "properties": {
+                "username": {
+                    "type": "string"
+                },
+                "uuid": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.QueueEmailRequest": {
             "type": "object",
             "properties": {
@@ -1723,6 +2254,50 @@
                     "type": "string"
                 },
                 "to": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.RefreshGameSessionRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "string"
+                },
+                "profile_uuid": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.RefreshGameSessionResponseDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.RefreshTokenRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SelectProfileRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "string"
+                },
+                "profile_uuid": {
                     "type": "string"
                 }
             }
@@ -1822,6 +2397,60 @@
                 },
                 "virtfusionUrl": {
                     "description": "Virtfusion",
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.TerminateGameSessionRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "string"
+                },
+                "profile_uuid": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.TerminateGameSessionResponseDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.TokenResponseDTO": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "error_description": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "scope": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "token_type": {
                     "type": "string"
                 }
             }
