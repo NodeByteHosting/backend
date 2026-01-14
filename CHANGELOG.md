@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fixed test expectations for rate limiter cleanup behavior
   - Removed tests for private/unexported functions
   - Aligned JWKS cache tests with actual NewJWKSCache(useStaging bool) signature
+- **Swagger Documentation Generation** - Fixed type reference issues in OpenAPI comments
+  - Corrected Swagger parameter annotations from backslash to dot notation (`types.RefreshTokenRequest` instead of `types.\RefreshTokenRequest`)
+  - Added missing `types.` package qualification to unqualified type references in `@Success` and `@Failure` annotations
+  - Fixed missing `types.` prefix on SuccessResponse instantiation in SelectProfile handler
+  - All Hytale OAuth handler endpoints now generate valid Swagger documentation
 
 ## [0.2.0] - 2026-01-14
 
