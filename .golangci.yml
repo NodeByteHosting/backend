@@ -1,0 +1,163 @@
+run:
+  timeout: 5m
+  tests: true
+  skip-dirs:
+    - vendor
+    - bin
+  go: '1.24'
+
+linters:
+  enable:
+    - aconv
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - decorder
+    - dupword
+    - durationcheck
+    - errcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - forbidigo
+    - forcetypeassert
+    - funlen
+    - gocheckcompileerrors
+    - gochecksumtype
+    - gocritic
+    - gocyclo
+    - godot
+    - godox
+    - gofmt
+    - gofumpt
+    - goheader
+    - goimports
+    - gomoddirectives
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - gosmopolitan
+    - gosimple
+    - govet
+    - grouper
+    - importas
+    - inamedparam
+    - ineffassign
+    - interfacebloat
+    - intrange
+    - ireturn
+    - lll
+    - loggercheck
+    - maintidx
+    - makezero
+    - mirror
+    - misspell
+    - mnd
+    - musttag
+    - nakedret
+    - nargout
+    - nestif
+    - nilerr
+    - nilnil
+    - nlreturn
+    - noctx
+    - nolintlint
+    - nonamedreturns
+    - nosnakecase
+    - nosprintfhostport
+    - paralleltest
+    - perfsprint
+    - prealloc
+    - predeclared
+    - promlinter
+    - protogetter
+    - reassign
+    - revive
+    - rowserrcheck
+    - rowsclose
+    - sloglint
+    - slurp
+    - spancheck
+    - sqlc
+    - staticcheck
+    - stdlibuserspace
+    - strconcat
+    - tagalign
+    - tagliatelle
+    - tenv
+    - testableexamples
+    - testpackage
+    - thelper
+    - tparallel
+    - typecheck
+    - unconvert
+    - undeclaredname
+    - unparam
+    - unsafeptr
+    - unusedvars
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+    - wrapcheck
+    - wsl
+    - zerologlint
+
+linters-settings:
+  gofmt:
+    simplify: true
+  
+  goimports:
+    local-prefixes: github.com/nodebyte/backend
+  
+  cyclop:
+    max-complexity: 10
+  
+  funlen:
+    lines: 100
+    statements: 50
+  
+  gocyclo:
+    min-complexity: 10
+  
+  govet:
+    check-shadowing: true
+  
+  lll:
+    line-length: 120
+  
+  misspell:
+    ignore-words:
+      - marshaller
+  
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: exported
+        arguments:
+          - "allowPrivateReceivers"
+      - name: increment-decrement
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: unused-parameter
+      - name: unused-receiver
+  
+  staticcheck:
+    go: '1.24'
+  
+  unparam:
+    check-exported: false
+
+issues:
+  exclude-use-default: false
+  exclude:
+    # G101 is about environment variable handling
+    - G101
+  max-issues-per-linter: 0
+  max-same-issues: 0

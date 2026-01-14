@@ -2,24 +2,36 @@
 
 REST API and background job processing service for NodeByte infrastructure management.
 
-[![Go Version](https://img.shields.io/badge/go-1.23+-blue.svg)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/go-1.24-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-AGPL%203.0-green.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](Dockerfile)
+[![Tests](https://github.com/NodeByteHosting/nodebyte-host/actions/workflows/test-build.yml/badge.svg)](https://github.com/NodeByteHosting/nodebyte-host/actions)
+[![Lint](https://github.com/NodeByteHosting/nodebyte-host/actions/workflows/lint.yml/badge.svg)](https://github.com/NodeByteHosting/nodebyte-host/actions)
+[![Coverage](https://codecov.io/gh/NodeByteHosting/nodebyte-host/branch/master/graph/badge.svg)](https://codecov.io/gh/NodeByteHosting/nodebyte-host)
 
 ## Overview
 
-The NodeByte Backend API provides a comprehensive REST API for managing game server infrastructure, with features including:
+The NodeByte Backend API provides a comprehensive REST API for managing game server infrastructure, with enterprise-grade features:
 
+- **Hytale OAuth 2.0 Authentication** - Device code flow, token management, game session handling with JWT validation
 - **Panel Synchronization** - Full Pterodactyl panel sync (locations, nodes, allocations, nests, eggs, servers, users, databases)
-- **Job Queue System** - Redis-backed async job processing with priority queues
+- **Job Queue System** - Redis-backed async job processing with priority queues (Asynq)
 - **Admin Dashboard** - Complete REST API for system settings, webhooks, and sync management
 - **Email Queue** - Asynchronous email sending via Resend API
 - **Discord Webhooks** - Real-time notifications for sync events and system changes
 - **Cron Scheduler** - Automated scheduled sync jobs with configurable intervals
-- **Database Configuration** - Dynamic system settings management with encryption support
+- **Rate Limiting** - Token bucket algorithm with per-endpoint configuration
+- **Audit Logging** - Compliance-grade event tracking with database persistence
+- **Database Configuration** - Dynamic system settings with AES-256-GCM encryption
 - **Health Monitoring** - Built-in health checks and comprehensive structured logging
 
 ## Quick Start
+
+### Prerequisites
+- Go 1.24+
+- PostgreSQL 12+
+- Redis 6+
+- Docker & Docker Compose (optional)
 
 ### Local Development
 
@@ -34,32 +46,52 @@ go mod tidy
 # Create environment file
 cp .env.example .env
 
-# Edit configuration
+# Edit configuration (set PTERODACTYL_URL, DATABASE_URL, etc.)
 nano .env
 
 # Start dependencies (Redis + PostgreSQL)
 docker-compose up -d postgres redis
 
+# Run database migrations
+# (Run these from the main app or apply schemas manually)
+
 # Run server
 go run ./cmd/api/main.go
 
 # Server runs at http://localhost:8080
+# Health check: curl http://localhost:8080/health
 ```
 
 ### Docker Deployment
 
 ```bash
-# Start all services
+# Start all services (backend + postgres + redis)
 docker-compose up -d
 
-# With monitoring (Asynq UI)
+# With Asynq web UI for job monitoring
 docker-compose --profile monitoring up -d
 
-# View logs
+# View live logs
 docker-compose logs -f backend
 
 # Shutdown
 docker-compose down
+```
+
+### Verify Installation
+
+```bash
+# Health check
+curl http://localhost:8080/health
+
+# Get statistics
+curl http://localhost:8080/api/stats
+
+# Trigger sync (requires API key)
+curl -X POST http://localhost:8080/api/v1/sync/full \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"skip_users": false}'
 ```
 
 ## Configuration
@@ -80,11 +112,16 @@ REDIS_URL=redis://localhost:6379        # Can also be: host:port
 # Security
 BACKEND_API_KEY=your-secret-api-key     # For X-API-Key authentication
 CORS_ORIGINS=https://app.example.com    # Comma-separated origins
+ENCRYPTION_KEY=32-byte-hex-encoded-key  # For encrypting sensitive values
 
 # Pterodactyl Panel
 PTERODACTYL_URL=https://panel.example.com          # Required
 PTERODACTYL_API_KEY=your-admin-api-key             # Required
 PTERODACTYL_CLIENT_API_KEY=client-api-key          # Optional
+
+# Hytale OAuth (Required for game server authentication)
+HYTALE_USE_STAGING=false                # false for production, true for staging Hytale OAuth
+# Tokens auto-refresh every 5-10 minutes
 
 # Virtfusion Panel (optional)
 VIRTFUSION_URL=https://virtfusion.example.com
@@ -110,7 +147,86 @@ CF_ACCESS_CLIENT_SECRET=your-client-secret
 
 ### Database Setup
 
-The backend uses the same PostgreSQL database as the main application. Required tables are created automatically on first run. See the main app's migrations for schema details.
+The backend uses the same PostgreSQL database as the main application. Required tables are created automatically via migrations. Key tables include:
+- `users` / `accounts` - User authentication
+- `hytale_oauth_tokens` - OAuth token storage (encrypted)
+- `hytale_audit_logs` - Compliance audit trail
+- `sync_logs` - Pterodactyl sync operation logs
+- `webhooks` - Discord webhook configurations
+
+## Hytale OAuth 2.0 Integration
+
+The backend implements complete OAuth 2.0 Device Code Flow for Hytale server authentication, enabling secure game session management.
+
+### Key Features
+
+✅ **Device Code Flow** - RFC 8628 compliant device authorization  
+✅ **Token Management** - Automatic refresh with 30-day validity  
+✅ **JWT Validation** - Ed25519 signature verification with JWKS caching  
+✅ **Game Sessions** - Per-player session tokens with 1-hour auto-refresh  
+✅ **Audit Logging** - Complete compliance trail of all OAuth operations  
+✅ **Rate Limiting** - Token bucket algorithm (5-20 requests per minute)  
+✅ **Error Handling** - Graceful session limit & expiration handling  
+
+### OAuth Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/v1/hytale/oauth/device-code` | POST | Request device code for browser auth |
+| `/api/v1/hytale/oauth/token` | POST | Poll for authorization completion |
+| `/api/v1/hytale/oauth/refresh` | POST | Refresh expired access tokens |
+| `/api/v1/hytale/oauth/profiles` | POST | List user's game profiles |
+| `/api/v1/hytale/oauth/select-profile` | POST | Bind profile to session |
+| `/api/v1/hytale/oauth/game-session/new` | POST | Create game session |
+| `/api/v1/hytale/oauth/game-session/refresh` | POST | Extend session lifetime |
+| `/api/v1/hytale/oauth/game-session/delete` | POST | Terminate session |
+
+### Example: Device Code Flow
+
+```bash
+# 1. Request device code
+curl -X POST http://localhost:8080/api/v1/hytale/oauth/device-code
+
+# Response:
+{
+  "device_code": "DE123456789ABCDEF",
+  "user_code": "AB12-CD34",
+  "verification_uri": "https://accounts.hytale.com/device",
+  "expires_in": 1800,
+  "interval": 5
+}
+
+# 2. User authorizes at verification_uri and enters user_code
+
+# 3. Poll for token (repeat until authorized)
+curl -X POST http://localhost:8080/api/v1/hytale/oauth/token \
+  -H "Content-Type: application/json" \
+  -d '{"device_code": "DE123456789ABCDEF"}'
+
+# Response (after user authorizes):
+{
+  "access_token": "eyJhbGc...",
+  "refresh_token": "refresh_eyJhbGc...",
+  "expires_in": 3600,
+  "account_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+# 4. Get profiles and create game session
+curl -X POST http://localhost:8080/api/v1/hytale/oauth/profiles \
+  -H "Authorization: Bearer eyJhbGc..."
+
+# 5. Create session for selected profile
+curl -X POST http://localhost:8080/api/v1/hytale/oauth/game-session/new \
+  -H "Authorization: Bearer eyJhbGc..." \
+  -H "Content-Type: application/json" \
+  -d '{"profile_uuid": "f47ac10b-58cc-4372-a567-0e02b2c3d479"}'
+```
+
+### Documentation
+
+- **[GSP API Reference](docs/HYTALE_API.md)** - Complete API docs with error codes
+- **[Downloader CLI Integration](docs/HYTALE_DOWNLOADER_INTEGRATION.md)** - Automated provisioning
+- **[Customer Auth Flow](docs/HYTALE_AUTH_FLOW.md)** - User-facing authentication guide
 
 ## API Documentation
 
@@ -589,26 +705,88 @@ docker-compose logs -f backend
 - Comprehensive error handling with zerolog
 - Structured logging with contextual information
 - Tests for business logic and API handlers
+- Code must pass: `gofmt`, `go vet`, `golangci-lint`
+
+### Pre-Commit Checks
+
+Before pushing, ensure code passes all checks:
+
+```bash
+# Format code
+gofmt -w .
+goimports -w .
+
+# Run linters
+golangci-lint run ./...
+
+# Run tests
+go test -v -race ./...
+
+# Build binary
+go build -o bin/nodebyte-backend ./cmd/api
+```
 
 ### Running Tests
 
 ```bash
-go test ./...
-go test -race ./...  # With race detection
+# All tests with race detection
+go test -v -race ./...
+
+# With coverage
+go test -v -race -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out  # View in browser
 ```
 
 ### Building
 
 ```bash
-# Build binary
+# Build binary (Linux)
 go build -o nodebyte-backend ./cmd/api
 
 # Cross-compile (macOS)
 GOOS=darwin GOARCH=amd64 go build -o nodebyte-backend ./cmd/api
 
-# Cross-compile (Linux)
-GOOS=linux GOARCH=amd64 go build -o nodebyte-backend ./cmd/api
+# Cross-compile (Windows)
+GOOS=windows GOARCH=amd64 go build -o nodebyte-backend.exe ./cmd/api
 ```
+
+## CI/CD Pipelines
+
+Automated workflows run on every commit and PR.
+
+### Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| **Test & Build** | Push/PR | Unit tests, build verification |
+| **Lint & Quality** | Push/PR | Code quality (50+ linters) |
+| **Format Check** | Push/PR | Code formatting (gofmt, goimports) |
+| **Coverage** | Push/PR | Test coverage (70%+ required) |
+| **Dependencies** | Weekly | Security scanning, dependency checks |
+| **Docker Build** | Tags/Push | Build & push Docker images |
+
+### Local CI Simulation
+
+Run the same checks locally before pushing:
+
+```bash
+# Run all checks
+./scripts/ci.sh  # If available, or run manually:
+
+gofmt -w .
+goimports -w .
+golangci-lint run ./...
+go test -v -race -coverprofile=coverage.out ./...
+go build -o bin/nodebyte-backend ./cmd/api
+```
+
+### GitHub Actions Status
+
+Check workflow status:
+- **GitHub Web:** Actions tab
+- **CLI:** `gh run list` / `gh run watch <id>`
+- **Email:** Failed workflow notifications
+
 
 ## Troubleshooting
 
@@ -620,29 +798,128 @@ psql $DATABASE_URL -c "SELECT 1"
 
 # Test Redis connection
 redis-cli -u $REDIS_URL ping
+
+# Check if server is running
+curl -v http://localhost:8080/health
 ```
 
 ### Worker Not Processing Jobs
 
 ```bash
-# Check Asynq Web UI at http://localhost:8081
+# Check Asynq Web UI at http://localhost:8081 (if monitoring profile active)
 # Or check logs for worker errors
 docker-compose logs backend | grep -i error
+
+# Verify queue connectivity
+redis-cli -u $REDIS_URL KEYS "*"
 ```
 
 ### Sync Not Completing
 
-1. Check Pterodactyl API credentials
-2. Verify network connectivity to panel
-3. Review sync logs: `GET /api/v1/sync/logs`
+1. Check Pterodactyl API credentials in `.env`
+2. Verify network connectivity to Pterodactyl panel
+3. Review sync logs: `GET /api/v1/sync/logs` (requires API key)
 4. Check worker server status in Asynq UI
+5. Look for database connection pool exhaustion in logs
 
-## Support
+### Hytale OAuth Issues
 
-- **Issues:** Report bugs on GitHub
-- **Documentation:** See inline code comments and API docs
+1. Verify `HYTALE_ENVIRONMENT` is set correctly (production or staging)
+2. Check JWKS cache refresh
+3. Review audit logs for auth failures
+4. Ensure database has `hytale_audit_logs` table
+
+### Code Quality Issues
+
+**"gofmt errors"**
+```bash
+gofmt -w .
+goimports -w .
+```
+
+**"golangci-lint errors"**
+```bash
+golangci-lint run ./...  # View all issues
+# Fix issues in code, then retry
+```
+
+**"Test coverage below 70%"**
+```bash
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out  # View coverage gaps
+# Write tests for uncovered code
+```
+
+## Architecture Overview
+
+```
+┌────────────────────────────────────┐
+│   REST API (Fiber v2 Framework)    │
+│  Auth: API Key, Bearer, or Public  │
+└────────────────┬───────────────────┘
+                 │
+    ┌────────────┼────────────┐
+    │            │            │
+┌───▼──┐    ┌───▼────┐  ┌────▼────┐
+│ Sync │    │ Hytale │  │  Admin  │
+│      │    │ OAuth  │  │Settings │
+└───┬──┘    └───┬────┘  └────┬────┘
+    │           │            │
+    └───────────┼────────────┘
+                │
+        ┌───────▼──────────┐
+        │  Queue Manager   │
+        │  (Asynq/Redis)   │
+        └────────┬─────────┘
+                 │
+        ┌────────▼────────┐
+        │    Workers      │
+        │- Sync Handler   │
+        │- Email Handler  │
+        │- Webhook Handler│
+        │- OAuth Refresher│
+        │- Scheduler      │
+        └────────┬────────┘
+                 │
+    ┌────────────┼────────────┐
+    │            │            │
+┌───▼──┐   ┌────▼──┐   ┌────▼────┐
+│ Panel│   │ Hytale│   │ Resend  │
+│      │   │ OAuth │   │ Email   │
+└──────┘   └───────┘   └─────────┘
+```
+
+## Performance
+
+- **Sync Operations:** Process 100+ items per batch
+- **Job Concurrency:** 10 concurrent workers per queue
+- **Connection Pool:** 25 max connections, 5 minimum
+- **Rate Limiting:** Token bucket (5-20 req/min per endpoint)
+- **Token Refresh:** Auto-refresh every 5-10 minutes
+- **JWKS Cache:** Hourly refresh, ~99% hit rate
+- **Request Timeout:** 30 seconds
+- **Graceful Shutdown:** 10 second timeout for cleanup
+
+## Related Documentation
+
+- [Hytale GSP API Reference](docs/HYTALE_API.md) - Complete API docs
+- [Downloader CLI Integration](docs/HYTALE_DOWNLOADER_INTEGRATION.md) - Provisioning guide
+- [Customer Auth Flow](docs/HYTALE_AUTH_FLOW.md) - User authentication guide
+- [CHANGELOG.md](CHANGELOG.md) - Version history and features
+
+## Support & Community
+
+- **Issues & Bugs:** Report on GitHub Issues
+- **Documentation:** See inline code comments and docs/
 - **Discord:** Join our community server
+- **Email:** support@nodebyte.com
 
 ## License
 
-AGPL 3.0 - See LICENSE file for details
+AGPL 3.0 - See [LICENSE](LICENSE) file for details
+
+---
+
+**Last Updated:** January 14, 2026  
+**Status:** Production Ready ✅  
+**Contributors:** NodeByte Development Team

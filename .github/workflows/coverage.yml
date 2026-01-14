@@ -1,0 +1,118 @@
+name: Code Coverage
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+      - develop
+
+jobs:
+  coverage:
+    name: Code Coverage Report
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: nodebyte_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Generate coverage report
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        env:
+          DATABASE_URL: "postgres://testuser:testpass@localhost:5432/nodebyte_test?sslmode=disable"
+          REDIS_URL: "redis://localhost:6379"
+          ENCRYPTION_KEY: "test-encryption-key-32-bytes-long!"
+
+      - name: Convert coverage to HTML
+        run: |
+          go install github.com/mattn/goveralls@latest
+          go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload coverage HTML
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage.html
+          retention-days: 30
+
+      - name: Generate coverage summary
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
+          echo "## Code Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Coverage:** $COVERAGE" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[View Full Report](coverage.html)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const coverage = require('child_process')
+              .execSync('go tool cover -func=coverage.out | grep total | awk \'{print $3}\'')
+              .toString()
+              .trim();
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `📊 **Code Coverage Report**\n\n**Total Coverage:** ${coverage}\n\n[View Full Report](coverage.html)`
+            });
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          THRESHOLD=70
+          echo "Coverage: ${COVERAGE}%"
+          echo "Threshold: ${THRESHOLD}%"
+          if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
+            echo "⚠️ Coverage below threshold (${COVERAGE}% < ${THRESHOLD}%)"
+            exit 1
+          fi
