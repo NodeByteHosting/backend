@@ -1,46 +1,5 @@
 basePath: /
 definitions:
-  handlers.CreateGameSessionRequest:
-    properties:
-      account_id:
-        type: string
-      profile_uuid:
-        type: string
-    type: object
-  handlers.CreateGameSessionResponseDTO:
-    properties:
-      error:
-        type: string
-      session:
-        $ref: '#/definitions/handlers.GameSessionDTO'
-      success:
-        type: boolean
-    type: object
-  handlers.DeviceCodeRequest:
-    properties:
-      account_id:
-        description: Owner UUID from Hytale
-        type: string
-    type: object
-  handlers.DeviceCodeResponseDTO:
-    properties:
-      device_code:
-        type: string
-      error:
-        type: string
-      expires_in:
-        type: integer
-      interval:
-        type: integer
-      success:
-        type: boolean
-      user_code:
-        type: string
-      verification_uri:
-        type: string
-      verification_uri_complete:
-        type: string
-    type: object
   handlers.DispatchWebhookRequest:
     properties:
       data:
@@ -58,47 +17,6 @@ definitions:
       success:
         type: boolean
     type: object
-  handlers.GameSessionDTO:
-    properties:
-      expires_at:
-        type: string
-      identity_token:
-        type: string
-      session_token:
-        type: string
-    type: object
-  handlers.GetProfilesRequest:
-    properties:
-      account_id:
-        type: string
-    type: object
-  handlers.GetProfilesResponseDTO:
-    properties:
-      error:
-        type: string
-      owner:
-        type: string
-      profiles:
-        items:
-          $ref: '#/definitions/handlers.ProfileDTO'
-        type: array
-      success:
-        type: boolean
-    type: object
-  handlers.PollTokenRequest:
-    properties:
-      account_id:
-        type: string
-      device_code:
-        type: string
-    type: object
-  handlers.ProfileDTO:
-    properties:
-      username:
-        type: string
-      uuid:
-        type: string
-    type: object
   handlers.QueueEmailRequest:
     properties:
       data:
@@ -110,34 +28,6 @@ definitions:
       template:
         type: string
       to:
-        type: string
-    type: object
-  handlers.RefreshGameSessionRequest:
-    properties:
-      account_id:
-        type: string
-      profile_uuid:
-        type: string
-    type: object
-  handlers.RefreshGameSessionResponseDTO:
-    properties:
-      error:
-        type: string
-      message:
-        type: string
-      success:
-        type: boolean
-    type: object
-  handlers.RefreshTokenRequest:
-    properties:
-      account_id:
-        type: string
-    type: object
-  handlers.SelectProfileRequest:
-    properties:
-      account_id:
-        type: string
-      profile_uuid:
         type: string
     type: object
   handlers.SuccessResponse:
@@ -209,41 +99,6 @@ definitions:
         description: Virtfusion
         type: string
     type: object
-  handlers.TerminateGameSessionRequest:
-    properties:
-      account_id:
-        type: string
-      profile_uuid:
-        type: string
-    type: object
-  handlers.TerminateGameSessionResponseDTO:
-    properties:
-      error:
-        type: string
-      message:
-        type: string
-      success:
-        type: boolean
-    type: object
-  handlers.TokenResponseDTO:
-    properties:
-      access_token:
-        type: string
-      error:
-        type: string
-      error_description:
-        type: string
-      expires_in:
-        type: integer
-      refresh_token:
-        type: string
-      scope:
-        type: string
-      success:
-        type: boolean
-      token_type:
-        type: string
-    type: object
   handlers.TriggerFullSyncRequest:
     properties:
       requested_by:
@@ -263,6 +118,230 @@ definitions:
       autoSyncInterval:
         type: integer
     type: object
+  types.CreateGameSessionRequest:
+    properties:
+      account_id:
+        description: Account/Owner UUID from Hytale
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      profile_uuid:
+        description: Profile/character UUID (optional if previously selected)
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+    type: object
+  types.CreateGameSessionResponseDTO:
+    properties:
+      error:
+        type: string
+      session:
+        $ref: '#/definitions/types.GameSessionDTO'
+      success:
+        example: true
+        type: boolean
+    type: object
+  types.DeviceCodeRequest:
+    properties:
+      account_id:
+        description: Account/Owner UUID from Hytale
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+  types.DeviceCodeResponseDTO:
+    properties:
+      device_code:
+        example: AH-wO0aD5nvS5xhd7rQw1qv6XUzC9Kk9IElVqxsqQ1KGIykN3iqjcqB5hFtMQxPuBs4uEA
+        type: string
+      error:
+        type: string
+      expires_in:
+        example: 900
+        type: integer
+      interval:
+        example: 5
+        type: integer
+      success:
+        example: true
+        type: boolean
+      user_code:
+        example: GFHD-MJHT
+        type: string
+      verification_uri:
+        example: https://accounts.hytale.com/oauth2/device?user_code=GFHD-MJHT
+        type: string
+      verification_uri_complete:
+        example: https://accounts.hytale.com/oauth2/device?user_code=GFHD-MJHT
+        type: string
+    type: object
+  types.ErrorResponse:
+    properties:
+      error:
+        description: Human-readable error message
+        example: account_id is required
+        type: string
+      success:
+        description: Whether the request was successful
+        example: false
+        type: boolean
+    type: object
+  types.GameSessionDTO:
+    properties:
+      expires_at:
+        description: Session expiry timestamp (1 hour from creation)
+        example: "2024-01-13T15:30:00Z"
+        type: string
+      identity_token:
+        description: Identity token containing player information
+        example: eyJhbGciOiJFZERTQSJ9...
+        type: string
+      session_token:
+        description: Session token for authentication with game server
+        example: eyJhbGciOiJFZERTQSJ9...
+        type: string
+    type: object
+  types.GetProfilesRequest:
+    properties:
+      account_id:
+        description: Account/Owner UUID from Hytale
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+  types.GetProfilesResponseDTO:
+    properties:
+      error:
+        type: string
+      owner:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      profiles:
+        items:
+          $ref: '#/definitions/types.ProfileDTO'
+        type: array
+      success:
+        example: true
+        type: boolean
+    type: object
+  types.PollTokenRequest:
+    properties:
+      account_id:
+        description: Account/Owner UUID from Hytale
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      device_code:
+        description: Device code from RequestDeviceCode response
+        example: AH-wO0aD5nvS5xhd7rQw1qv6XUzC9Kk9IElVqxsqQ1KGIykN3iqjcqB5hFtMQxPuBs4uEA
+        type: string
+    type: object
+  types.ProfileDTO:
+    properties:
+      username:
+        description: Player username/character name
+        example: PlayerName
+        type: string
+      uuid:
+        description: Profile UUID (game character UUID)
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+    type: object
+  types.RefreshGameSessionRequest:
+    properties:
+      account_id:
+        description: Account/Owner UUID from Hytale
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      profile_uuid:
+        description: Profile/character UUID (optional if previously selected)
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+    type: object
+  types.RefreshGameSessionResponseDTO:
+    properties:
+      error:
+        type: string
+      message:
+        example: Game session refreshed successfully
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+  types.RefreshTokenRequest:
+    properties:
+      account_id:
+        description: Account/Owner UUID from Hytale
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+  types.SelectProfileRequest:
+    properties:
+      account_id:
+        description: Account/Owner UUID from Hytale
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      profile_uuid:
+        description: Profile/character UUID to select
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+    type: object
+  types.SuccessResponse:
+    properties:
+      message:
+        description: Optional message
+        example: Operation completed successfully
+        type: string
+      success:
+        description: Whether the request was successful
+        example: true
+        type: boolean
+    type: object
+  types.TerminateGameSessionRequest:
+    properties:
+      account_id:
+        description: Account/Owner UUID from Hytale
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      profile_uuid:
+        description: Profile/character UUID (optional if previously selected)
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+    type: object
+  types.TerminateGameSessionResponseDTO:
+    properties:
+      error:
+        type: string
+      message:
+        example: Game session terminated successfully
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+  types.TokenResponseDTO:
+    properties:
+      access_token:
+        example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      error:
+        example: authorization_pending
+        type: string
+      error_description:
+        example: The user has not yet completed the authorization process
+        type: string
+      expires_in:
+        example: 3600
+        type: integer
+      refresh_token:
+        example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      scope:
+        example: openid offline auth:server
+        type: string
+      success:
+        example: true
+        type: boolean
+      token_type:
+        example: Bearer
+        type: string
+    type: object
 host: core.nodebyte.host
 info:
   contact:
@@ -275,7 +354,7 @@ info:
     url: https://www.gnu.org/licenses/agpl-3.0.en.html
   termsOfService: https://nodebyte.co.uk/legal/terms
   title: NodeByte API
-  version: 0.1.0
+  version: 0.2.0
 paths:
   /api/admin/settings:
     get:
@@ -993,22 +1072,22 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/handlers.DeviceCodeRequest'
+          $ref: '#/definitions/types.DeviceCodeRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.DeviceCodeResponseDTO'
+            $ref: '#/definitions/types.DeviceCodeResponseDTO'
         "400":
           description: Invalid request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
       summary: Request Device Code
       tags:
       - Hytale OAuth
@@ -1023,26 +1102,26 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/handlers.TerminateGameSessionRequest'
+          $ref: '#/definitions/types.TerminateGameSessionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.TerminateGameSessionResponseDTO'
+            $ref: '#/definitions/types.TerminateGameSessionResponseDTO'
         "400":
           description: Invalid request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "404":
           description: Session not found
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
       summary: Terminate Game Session
       tags:
       - Hytale OAuth
@@ -1057,30 +1136,30 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/handlers.CreateGameSessionRequest'
+          $ref: '#/definitions/types.CreateGameSessionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.CreateGameSessionResponseDTO'
+            $ref: '#/definitions/types.CreateGameSessionResponseDTO'
         "400":
           description: Invalid request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "403":
           description: Session limit reached
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "404":
           description: Token or profile not found
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
       summary: Create Game Session
       tags:
       - Hytale OAuth
@@ -1095,26 +1174,26 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/handlers.RefreshGameSessionRequest'
+          $ref: '#/definitions/types.RefreshGameSessionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.RefreshGameSessionResponseDTO'
+            $ref: '#/definitions/types.RefreshGameSessionResponseDTO'
         "400":
           description: Invalid request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "404":
           description: Session not found
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
       summary: Refresh Game Session
       tags:
       - Hytale OAuth
@@ -1129,26 +1208,26 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/handlers.GetProfilesRequest'
+          $ref: '#/definitions/types.GetProfilesRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.GetProfilesResponseDTO'
+            $ref: '#/definitions/types.GetProfilesResponseDTO'
         "400":
           description: Invalid request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "404":
           description: Token not found
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
       summary: Get Game Profiles
       tags:
       - Hytale OAuth
@@ -1163,26 +1242,26 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/handlers.RefreshTokenRequest'
+          $ref: '#/definitions/types.RefreshTokenRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.TokenResponseDTO'
+            $ref: '#/definitions/types.TokenResponseDTO'
         "400":
           description: Invalid request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "404":
           description: Token not found
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
       summary: Refresh Access Token
       tags:
       - Hytale OAuth
@@ -1197,22 +1276,22 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/handlers.SelectProfileRequest'
+          $ref: '#/definitions/types.SelectProfileRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.SuccessResponse'
+            $ref: '#/definitions/types.SuccessResponse'
         "400":
           description: Invalid request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
       summary: Select Game Profile
       tags:
       - Hytale OAuth
@@ -1227,22 +1306,22 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/handlers.PollTokenRequest'
+          $ref: '#/definitions/types.PollTokenRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.TokenResponseDTO'
+            $ref: '#/definitions/types.TokenResponseDTO'
         "400":
           description: Invalid request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/types.ErrorResponse'
       summary: Poll for Token
       tags:
       - Hytale OAuth

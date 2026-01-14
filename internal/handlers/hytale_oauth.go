@@ -193,11 +193,11 @@ func (h *HytaleOAuthHandler) PollToken(c *fiber.Ctx) error {
 // @Tags Hytale OAuth
 // @Accept json
 // @Produce json
-// @Param payload body types.\RefreshTokenRequest true "Refresh token request"
-// @Success 200 {object} TokenResponseDTO
-// @Failure 400 {object} ErrorResponse "Invalid request"
-// @Failure 404 {object} ErrorResponse "Token not found"
-// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Param payload body types.RefreshTokenRequest true "Refresh token request"
+// @Success 200 {object} types.TokenResponseDTO
+// @Failure 400 {object} types.ErrorResponse "Invalid request"
+// @Failure 404 {object} types.ErrorResponse "Token not found"
+// @Failure 500 {object} types.ErrorResponse "Internal server error"
 // @Router /api/v1/hytale/oauth/refresh [post]
 func (h *HytaleOAuthHandler) RefreshAccessToken(c *fiber.Ctx) error {
 	var req types.RefreshTokenRequest
@@ -282,11 +282,11 @@ func (h *HytaleOAuthHandler) RefreshAccessToken(c *fiber.Ctx) error {
 // @Tags Hytale OAuth
 // @Accept json
 // @Produce json
-// @Param payload body types.\GetProfilesRequest true "Get profiles request"
-// @Success 200 {object} GetProfilesResponseDTO
-// @Failure 400 {object} ErrorResponse "Invalid request"
-// @Failure 404 {object} ErrorResponse "Token not found"
-// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Param payload body types.GetProfilesRequest true "Get profiles request"
+// @Success 200 {object} types.GetProfilesResponseDTO
+// @Failure 400 {object} types.ErrorResponse "Invalid request"
+// @Failure 404 {object} types.ErrorResponse "Token not found"
+// @Failure 500 {object} types.ErrorResponse "Internal server error"
 // @Router /api/v1/hytale/oauth/profiles [post]
 func (h *HytaleOAuthHandler) GetProfiles(c *fiber.Ctx) error {
 	var req types.GetProfilesRequest
@@ -352,10 +352,10 @@ func (h *HytaleOAuthHandler) GetProfiles(c *fiber.Ctx) error {
 // @Tags Hytale OAuth
 // @Accept json
 // @Produce json
-// @Param payload body types.\SelectProfileRequest true "Select profile request"
-// @Success 200 {object} SuccessResponse
-// @Failure 400 {object} ErrorResponse "Invalid request"
-// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Param payload body types.SelectProfileRequest true "Select profile request"
+// @Success 200 {object} types.SuccessResponse
+// @Failure 400 {object} types.ErrorResponse "Invalid request"
+// @Failure 500 {object} types.ErrorResponse "Internal server error"
 // @Router /api/v1/hytale/oauth/select-profile [post]
 func (h *HytaleOAuthHandler) SelectProfile(c *fiber.Ctx) error {
 	var req types.SelectProfileRequest
@@ -390,7 +390,7 @@ func (h *HytaleOAuthHandler) SelectProfile(c *fiber.Ctx) error {
 		Str("profile_uuid", req.ProfileUUID).
 		Msg("Profile selected")
 
-	return c.JSON(SuccessResponse{
+	return c.JSON(types.SuccessResponse{
 		Success: true,
 		Message: fmt.Sprintf("Profile %s selected", req.ProfileUUID),
 	})
@@ -402,12 +402,12 @@ func (h *HytaleOAuthHandler) SelectProfile(c *fiber.Ctx) error {
 // @Tags Hytale OAuth
 // @Accept json
 // @Produce json
-// @Param payload body types.\CreateGameSessionRequest true "Create game session request"
-// @Success 200 {object} CreateGameSessionResponseDTO
-// @Failure 400 {object} ErrorResponse "Invalid request"
-// @Failure 404 {object} ErrorResponse "Token or profile not found"
-// @Failure 403 {object} ErrorResponse "Session limit reached"
-// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Param payload body types.CreateGameSessionRequest true "Create game session request"
+// @Success 200 {object} types.CreateGameSessionResponseDTO
+// @Failure 400 {object} types.ErrorResponse "Invalid request"
+// @Failure 404 {object} types.ErrorResponse "Token or profile not found"
+// @Failure 403 {object} types.ErrorResponse "Session limit reached"
+// @Failure 500 {object} types.ErrorResponse "Internal server error"
 // @Router /api/v1/hytale/oauth/game-session/new [post]
 func (h *HytaleOAuthHandler) CreateGameSession(c *fiber.Ctx) error {
 	var req types.CreateGameSessionRequest
@@ -513,11 +513,11 @@ func (h *HytaleOAuthHandler) CreateGameSession(c *fiber.Ctx) error {
 // @Tags Hytale OAuth
 // @Accept json
 // @Produce json
-// @Param payload body types.\RefreshGameSessionRequest true "Refresh game session request"
-// @Success 200 {object} RefreshGameSessionResponseDTO
-// @Failure 400 {object} ErrorResponse "Invalid request"
-// @Failure 404 {object} ErrorResponse "Session not found"
-// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Param payload body types.RefreshGameSessionRequest true "Refresh game session request"
+// @Success 200 {object} types.RefreshGameSessionResponseDTO
+// @Failure 400 {object} types.ErrorResponse "Invalid request"
+// @Failure 404 {object} types.ErrorResponse "Session not found"
+// @Failure 500 {object} types.ErrorResponse "Internal server error"
 // @Router /api/v1/hytale/oauth/game-session/refresh [post]
 func (h *HytaleOAuthHandler) RefreshGameSession(c *fiber.Ctx) error {
 	var req types.RefreshGameSessionRequest
@@ -601,11 +601,11 @@ func (h *HytaleOAuthHandler) RefreshGameSession(c *fiber.Ctx) error {
 // @Tags Hytale OAuth
 // @Accept json
 // @Produce json
-// @Param payload body types.\TerminateGameSessionRequest true "Terminate game session request"
-// @Success 200 {object} TerminateGameSessionResponseDTO
-// @Failure 400 {object} ErrorResponse "Invalid request"
-// @Failure 404 {object} ErrorResponse "Session not found"
-// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Param payload body types.TerminateGameSessionRequest true "Terminate game session request"
+// @Success 200 {object} types.TerminateGameSessionResponseDTO
+// @Failure 400 {object} types.ErrorResponse "Invalid request"
+// @Failure 404 {object} types.ErrorResponse "Session not found"
+// @Failure 500 {object} types.ErrorResponse "Internal server error"
 // @Router /api/v1/hytale/oauth/game-session/delete [post]
 func (h *HytaleOAuthHandler) TerminateGameSession(c *fiber.Ctx) error {
 	var req types.TerminateGameSessionRequest

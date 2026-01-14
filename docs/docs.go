@@ -1142,7 +1142,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.DeviceCodeRequest"
+                            "$ref": "#/definitions/types.DeviceCodeRequest"
                         }
                     }
                 ],
@@ -1150,19 +1150,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.DeviceCodeResponseDTO"
+                            "$ref": "#/definitions/types.DeviceCodeResponseDTO"
                         }
                     },
                     "400": {
                         "description": "Invalid request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     }
                 }
@@ -1188,7 +1188,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.TerminateGameSessionRequest"
+                            "$ref": "#/definitions/types.TerminateGameSessionRequest"
                         }
                     }
                 ],
@@ -1196,25 +1196,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.TerminateGameSessionResponseDTO"
+                            "$ref": "#/definitions/types.TerminateGameSessionResponseDTO"
                         }
                     },
                     "400": {
                         "description": "Invalid request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Session not found",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     }
                 }
@@ -1240,7 +1240,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.CreateGameSessionRequest"
+                            "$ref": "#/definitions/types.CreateGameSessionRequest"
                         }
                     }
                 ],
@@ -1248,31 +1248,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.CreateGameSessionResponseDTO"
+                            "$ref": "#/definitions/types.CreateGameSessionResponseDTO"
                         }
                     },
                     "400": {
                         "description": "Invalid request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "403": {
                         "description": "Session limit reached",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Token or profile not found",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     }
                 }
@@ -1298,7 +1298,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.RefreshGameSessionRequest"
+                            "$ref": "#/definitions/types.RefreshGameSessionRequest"
                         }
                     }
                 ],
@@ -1306,25 +1306,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.RefreshGameSessionResponseDTO"
+                            "$ref": "#/definitions/types.RefreshGameSessionResponseDTO"
                         }
                     },
                     "400": {
                         "description": "Invalid request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Session not found",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     }
                 }
@@ -1350,7 +1350,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.GetProfilesRequest"
+                            "$ref": "#/definitions/types.GetProfilesRequest"
                         }
                     }
                 ],
@@ -1358,25 +1358,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.GetProfilesResponseDTO"
+                            "$ref": "#/definitions/types.GetProfilesResponseDTO"
                         }
                     },
                     "400": {
                         "description": "Invalid request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Token not found",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     }
                 }
@@ -1402,7 +1402,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.RefreshTokenRequest"
+                            "$ref": "#/definitions/types.RefreshTokenRequest"
                         }
                     }
                 ],
@@ -1410,25 +1410,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.TokenResponseDTO"
+                            "$ref": "#/definitions/types.TokenResponseDTO"
                         }
                     },
                     "400": {
                         "description": "Invalid request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Token not found",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     }
                 }
@@ -1454,7 +1454,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.SelectProfileRequest"
+                            "$ref": "#/definitions/types.SelectProfileRequest"
                         }
                     }
                 ],
@@ -1462,19 +1462,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.SuccessResponse"
+                            "$ref": "#/definitions/types.SuccessResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     }
                 }
@@ -1500,7 +1500,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.PollTokenRequest"
+                            "$ref": "#/definitions/types.PollTokenRequest"
                         }
                     }
                 ],
@@ -1508,19 +1508,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.TokenResponseDTO"
+                            "$ref": "#/definitions/types.TokenResponseDTO"
                         }
                     },
                     "400": {
                         "description": "Invalid request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/types.ErrorResponse"
                         }
                     }
                 }
@@ -2087,69 +2087,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "handlers.CreateGameSessionRequest": {
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "type": "string"
-                },
-                "profile_uuid": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.CreateGameSessionResponseDTO": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                },
-                "session": {
-                    "$ref": "#/definitions/handlers.GameSessionDTO"
-                },
-                "success": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "handlers.DeviceCodeRequest": {
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "description": "Owner UUID from Hytale",
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.DeviceCodeResponseDTO": {
-            "type": "object",
-            "properties": {
-                "device_code": {
-                    "type": "string"
-                },
-                "error": {
-                    "type": "string"
-                },
-                "expires_in": {
-                    "type": "integer"
-                },
-                "interval": {
-                    "type": "integer"
-                },
-                "success": {
-                    "type": "boolean"
-                },
-                "user_code": {
-                    "type": "string"
-                },
-                "verification_uri": {
-                    "type": "string"
-                },
-                "verification_uri_complete": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.DispatchWebhookRequest": {
             "type": "object",
             "properties": {
@@ -2176,70 +2113,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.GameSessionDTO": {
-            "type": "object",
-            "properties": {
-                "expires_at": {
-                    "type": "string"
-                },
-                "identity_token": {
-                    "type": "string"
-                },
-                "session_token": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.GetProfilesRequest": {
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.GetProfilesResponseDTO": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                },
-                "owner": {
-                    "type": "string"
-                },
-                "profiles": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.ProfileDTO"
-                    }
-                },
-                "success": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "handlers.PollTokenRequest": {
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "type": "string"
-                },
-                "device_code": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.ProfileDTO": {
-            "type": "object",
-            "properties": {
-                "username": {
-                    "type": "string"
-                },
-                "uuid": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.QueueEmailRequest": {
             "type": "object",
             "properties": {
@@ -2256,50 +2129,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "to": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.RefreshGameSessionRequest": {
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "type": "string"
-                },
-                "profile_uuid": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.RefreshGameSessionResponseDTO": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "success": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "handlers.RefreshTokenRequest": {
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.SelectProfileRequest": {
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "type": "string"
-                },
-                "profile_uuid": {
                     "type": "string"
                 }
             }
@@ -2403,60 +2232,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.TerminateGameSessionRequest": {
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "type": "string"
-                },
-                "profile_uuid": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.TerminateGameSessionResponseDTO": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "success": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "handlers.TokenResponseDTO": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string"
-                },
-                "error": {
-                    "type": "string"
-                },
-                "error_description": {
-                    "type": "string"
-                },
-                "expires_in": {
-                    "type": "integer"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "scope": {
-                    "type": "string"
-                },
-                "success": {
-                    "type": "boolean"
-                },
-                "token_type": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.TriggerFullSyncRequest": {
             "type": "object",
             "properties": {
@@ -2486,6 +2261,318 @@ const docTemplate = `{
                     "type": "integer"
                 }
             }
+        },
+        "types.CreateGameSessionRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "Account/Owner UUID from Hytale",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "profile_uuid": {
+                    "description": "Profile/character UUID (optional if previously selected)",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440001"
+                }
+            }
+        },
+        "types.CreateGameSessionResponseDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "session": {
+                    "$ref": "#/definitions/types.GameSessionDTO"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "types.DeviceCodeRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "Account/Owner UUID from Hytale",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "types.DeviceCodeResponseDTO": {
+            "type": "object",
+            "properties": {
+                "device_code": {
+                    "type": "string",
+                    "example": "AH-wO0aD5nvS5xhd7rQw1qv6XUzC9Kk9IElVqxsqQ1KGIykN3iqjcqB5hFtMQxPuBs4uEA"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer",
+                    "example": 900
+                },
+                "interval": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "user_code": {
+                    "type": "string",
+                    "example": "GFHD-MJHT"
+                },
+                "verification_uri": {
+                    "type": "string",
+                    "example": "https://accounts.hytale.com/oauth2/device?user_code=GFHD-MJHT"
+                },
+                "verification_uri_complete": {
+                    "type": "string",
+                    "example": "https://accounts.hytale.com/oauth2/device?user_code=GFHD-MJHT"
+                }
+            }
+        },
+        "types.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "description": "Human-readable error message",
+                    "type": "string",
+                    "example": "account_id is required"
+                },
+                "success": {
+                    "description": "Whether the request was successful",
+                    "type": "boolean",
+                    "example": false
+                }
+            }
+        },
+        "types.GameSessionDTO": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "description": "Session expiry timestamp (1 hour from creation)",
+                    "type": "string",
+                    "example": "2024-01-13T15:30:00Z"
+                },
+                "identity_token": {
+                    "description": "Identity token containing player information",
+                    "type": "string",
+                    "example": "eyJhbGciOiJFZERTQSJ9..."
+                },
+                "session_token": {
+                    "description": "Session token for authentication with game server",
+                    "type": "string",
+                    "example": "eyJhbGciOiJFZERTQSJ9..."
+                }
+            }
+        },
+        "types.GetProfilesRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "Account/Owner UUID from Hytale",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "types.GetProfilesResponseDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "profiles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.ProfileDTO"
+                    }
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "types.PollTokenRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "Account/Owner UUID from Hytale",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "device_code": {
+                    "description": "Device code from RequestDeviceCode response",
+                    "type": "string",
+                    "example": "AH-wO0aD5nvS5xhd7rQw1qv6XUzC9Kk9IElVqxsqQ1KGIykN3iqjcqB5hFtMQxPuBs4uEA"
+                }
+            }
+        },
+        "types.ProfileDTO": {
+            "type": "object",
+            "properties": {
+                "username": {
+                    "description": "Player username/character name",
+                    "type": "string",
+                    "example": "PlayerName"
+                },
+                "uuid": {
+                    "description": "Profile UUID (game character UUID)",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440001"
+                }
+            }
+        },
+        "types.RefreshGameSessionRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "Account/Owner UUID from Hytale",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "profile_uuid": {
+                    "description": "Profile/character UUID (optional if previously selected)",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440001"
+                }
+            }
+        },
+        "types.RefreshGameSessionResponseDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Game session refreshed successfully"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "types.RefreshTokenRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "Account/Owner UUID from Hytale",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "types.SelectProfileRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "Account/Owner UUID from Hytale",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "profile_uuid": {
+                    "description": "Profile/character UUID to select",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440001"
+                }
+            }
+        },
+        "types.SuccessResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "description": "Optional message",
+                    "type": "string",
+                    "example": "Operation completed successfully"
+                },
+                "success": {
+                    "description": "Whether the request was successful",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "types.TerminateGameSessionRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "Account/Owner UUID from Hytale",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "profile_uuid": {
+                    "description": "Profile/character UUID (optional if previously selected)",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440001"
+                }
+            }
+        },
+        "types.TerminateGameSessionResponseDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Game session terminated successfully"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "types.TokenResponseDTO": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+                },
+                "error": {
+                    "type": "string",
+                    "example": "authorization_pending"
+                },
+                "error_description": {
+                    "type": "string",
+                    "example": "The user has not yet completed the authorization process"
+                },
+                "expires_in": {
+                    "type": "integer",
+                    "example": 3600
+                },
+                "refresh_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+                },
+                "scope": {
+                    "type": "string",
+                    "example": "openid offline auth:server"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "token_type": {
+                    "type": "string",
+                    "example": "Bearer"
+                }
+            }
         }
     },
     "securityDefinitions": {
@@ -2500,7 +2587,7 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "0.1.0",
+	Version:          "0.2.0",
 	Host:             "core.nodebyte.host",
 	BasePath:         "/",
 	Schemes:          []string{"http", "https"},
