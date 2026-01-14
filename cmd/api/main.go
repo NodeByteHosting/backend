@@ -43,6 +43,7 @@ import (
 	"github.com/nodebyte/backend/internal/database"
 	"github.com/nodebyte/backend/internal/handlers"
 	"github.com/nodebyte/backend/internal/queue"
+	"github.com/nodebyte/backend/internal/sentry"
 	"github.com/nodebyte/backend/internal/workers"
 )
 
@@ -118,7 +119,11 @@ func main() {
 
 	log.Info().Str("redis", cfg.RedisURL).Msg("Connected to Redis")
 
-	// Initialize Fiber app
+	sentryHandler, err := sentry.InitSentry(cfg.SentryDSN, cfg.Env, "0.2.1")
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize Sentry")
+	}
+
 	app := fiber.New(fiber.Config{
 		AppName:      "NodeByte Backend v1.0.0",
 		ReadTimeout:  30 * time.Second,
@@ -128,6 +133,9 @@ func main() {
 
 	// Middleware
 	app.Use(recover.New())
+	if sentryHandler != nil {
+		app.Use(sentryHandler)
+	}
 	app.Use(logger.New(logger.Config{
 		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
 	}))
@@ -159,7 +167,6 @@ func main() {
 		}
 	}()
 
-	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -167,13 +174,12 @@ func main() {
 		<-quit
 		log.Info().Msg("Shutting down server...")
 
+		sentry.Flush(5 * time.Second)
+
 		// Stop scheduler
 		scheduler.Stop()
-
-		// Stop worker server
 		workerServer.Stop()
 
-		// Shutdown Fiber with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
@@ -182,7 +188,6 @@ func main() {
 		}
 	}()
 
-	// Start HTTP server
 	port := cfg.Port
 	if port == "" {
 		port = "8080"

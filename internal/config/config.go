@@ -57,6 +57,9 @@ type Config struct {
 
 	// Hytale OAuth
 	HytaleUseStaging bool
+
+	// Sentry Error Tracking
+	SentryDSN string
 }
 
 // Load reads configuration from environment variables
@@ -94,6 +97,9 @@ func Load() (*Config, error) {
 
 		// Hytale
 		HytaleUseStaging: getEnvBool("HYTALE_USE_STAGING", false),
+
+		// Sentry
+		SentryDSN: os.Getenv("SENTRY_DSN"),
 	}
 
 	// Validate required fields

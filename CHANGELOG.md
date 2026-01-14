@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.1] - Unreleased
 
 ### Added
+- **Sentry Error Tracking Integration** - Production error monitoring
+  - Optional Sentry SDK integration for real-time error tracking
+  - Fiber middleware for automatic panic recovery and error reporting
+  - `SENTRY_DSN` environment variable configuration
+  - Request context preservation with tags and custom data
+  - Helper functions for manual error capture (`sentry.CaptureException`, `sentry.CaptureMessage`)
+  - 5-second timeout during graceful shutdown for pending event delivery
+  - 10% transaction trace sampling for performance monitoring
 - **Comprehensive Unit Test Suite** - Core packages tested for reliability
   - Config loading and environment variable parsing tests
   - Error handling and HTTP status mapping tests
