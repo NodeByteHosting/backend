@@ -63,9 +63,10 @@ jobs:
 
       - name: Run go fmt check
         run: |
-          if [ -n "$(go fmt ./...)" ]; then
-            echo "Code not formatted with gofmt"
-            go fmt ./...
+          UNFORMATTED=$(gofmt -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "Code not formatted with gofmt:"
+            echo "$UNFORMATTED"
             exit 1
           fi
 
