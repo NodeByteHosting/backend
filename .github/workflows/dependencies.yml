@@ -48,7 +48,6 @@ jobs:
         continue-on-error: true
 
       - name: Check for vulnerable dependencies
-        uses: Nancy Nancy check
         run: |
           go install github.com/sonatype-nexus-community/nancy@latest
           go list -json -m all | nancy sleuth
@@ -66,7 +65,7 @@ jobs:
           echo "**Generated:** $(date)" >> dependency-report.md
 
       - name: Upload dependency report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: dependency-report
           path: dependency-report.md

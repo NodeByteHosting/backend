@@ -54,7 +54,7 @@ jobs:
           fi
 
       - name: Comment if formatting needed
-        if: steps.fmt.outputs.needs_format == 'true' || steps.imports.outputs.needs_imports == 'true'
+        if: github.event_name == 'pull_request' && (steps.fmt.outputs.needs_format == 'true' || steps.imports.outputs.needs_imports == 'true')
         uses: actions/github-script@v7
         with:
           script: |

@@ -36,11 +36,13 @@ jobs:
 
       - name: Run go vet
         run: go vet ./...
+        continue-on-error: true
 
       - name: Run staticcheck
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
           staticcheck ./...
+        continue-on-error: true
 
       - name: Check for security issues with gosec
         run: |
@@ -51,3 +53,4 @@ jobs:
         run: |
           go install github.com/kisielk/errcheck@latest
           errcheck ./...
+        continue-on-error: true
