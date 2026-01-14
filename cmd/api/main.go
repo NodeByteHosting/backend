@@ -1,5 +1,5 @@
 // @title NodeByte API
-// @version 0.1.0
+// @version 0.2.0
 // @description Comprehensive REST API for managing game server infrastructure with panel integration, async job queue management, and real-time sync operations
 // @termsOfService https://nodebyte.co.uk/legal/terms
 // @contact.name Contact Support

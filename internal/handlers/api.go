@@ -1,7 +1,7 @@
 // Package handlers provides HTTP handlers for the NodeByte API.
 //
 // @title NodeByte Backend API
-// @version 1.0.0
+// @version 0.2.0
 // @description Comprehensive API for managing game server infrastructure with Pterodactyl panel integration
 // @host localhost:8080
 // @basePath /
