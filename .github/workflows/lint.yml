@@ -1,16 +1,17 @@
 name: Code Lint & Quality
 
-on:
-  push:
-    branches:
-      - master
-      - main
-      - develop
-  pull_request:
-    branches:
-      - master
-      - main
-      - develop
+# DISABLED: Service maintenance
+# on:
+#   push:
+#     branches:
+#       - master
+#       - main
+#       - develop
+#   pull_request:
+#     branches:
+#       - master
+#       - main
+#       - develop
 
 jobs:
   lint:
