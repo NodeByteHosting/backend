@@ -10,6 +10,7 @@ import (
 
 	"github.com/nodebyte/backend/internal/config"
 	"github.com/nodebyte/backend/internal/database"
+	"github.com/nodebyte/backend/internal/panels"
 	"github.com/nodebyte/backend/internal/queue"
 )
 
@@ -38,7 +39,15 @@ func (s *Scheduler) Start() error {
 	log.Info().Msg("Starting scheduler")
 
 	queueManager := queue.NewManager(s.asynqClient)
-	hytaleRefresher := NewHytaleRefresher(s.db, s.cfg.HytaleUseStaging)
+	pteroClient := panels.NewPterodactylClientWithClientKey(
+		s.cfg.PterodactylURL,
+		s.cfg.PterodactylAPIKey,
+		s.cfg.PterodactylClientAPIKey,
+		s.cfg.CFAccessClientID,
+		s.cfg.CFAccessClientSecret,
+	)
+	hytaleRefresher := NewHytaleRefresher(s.db, pteroClient, s.cfg.HytaleUseStaging)
+	hytaleLogPersister := NewHytaleLogPersister(s.db, s.cfg.HytaleUseStaging)
 
 	// Auto-sync job (if enabled)
 	if s.cfg.AutoSyncEnabled {
@@ -82,8 +91,8 @@ func (s *Scheduler) Start() error {
 		log.Info().Msg("Scheduled OAuth token refresh (every 5 minutes)")
 	}
 
-	// Game session refresh every 10 minutes
-	_, err = s.cron.AddFunc("@every 10m", func() {
+	// Game session refresh every 5 minutes (checks if within 5 min of expiry)
+	_, err = s.cron.AddFunc("@every 5m", func() {
 		log.Debug().Msg("Running game session refresh")
 		if err := hytaleRefresher.RefreshGameSessions(context.Background()); err != nil {
 			log.Error().Err(err).Msg("Failed to refresh game sessions")
@@ -92,7 +101,7 @@ func (s *Scheduler) Start() error {
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to schedule game session refresh")
 	} else {
-		log.Info().Msg("Scheduled game session refresh (every 10 minutes)")
+		log.Info().Msg("Scheduled game session refresh (every 5 minutes)")
 	}
 
 	// Game session cleanup daily at 2 AM
@@ -106,6 +115,32 @@ func (s *Scheduler) Start() error {
 		log.Error().Err(err).Msg("Failed to schedule game session cleanup")
 	} else {
 		log.Info().Msg("Scheduled game session cleanup (daily at 2 AM)")
+	}
+
+	// Hytale server logs persistence every 5 minutes
+	_, err = s.cron.AddFunc("@every 5m", func() {
+		log.Debug().Msg("Running Hytale server logs persistence")
+		if err := hytaleLogPersister.PersistGameServerLogs(context.Background()); err != nil {
+			log.Error().Err(err).Msg("Failed to persist Hytale server logs")
+		}
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to schedule Hytale logs persistence")
+	} else {
+		log.Info().Msg("Scheduled Hytale server logs persistence (every 5 minutes)")
+	}
+
+	// Hytale server logs cleanup daily at 4 AM (keep 30 days)
+	_, err = s.cron.AddFunc("0 0 4 * * *", func() {
+		log.Debug().Msg("Running Hytale logs cleanup")
+		if err := hytaleLogPersister.CleanupOldLogs(context.Background(), 30); err != nil {
+			log.Error().Err(err).Msg("Failed to cleanup old Hytale logs")
+		}
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to schedule Hytale logs cleanup")
+	} else {
+		log.Info().Msg("Scheduled Hytale server logs cleanup (daily at 4 AM)")
 	}
 
 	// Daily log cleanup at 3 AM

@@ -1,6 +1,7 @@
 package panels
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -244,6 +245,35 @@ type PteroDatabase struct {
 		MaxConnections int    `json:"max_connections"`
 		CreatedAt      string `json:"created_at"`
 		UpdatedAt      string `json:"updated_at"`
+	} `json:"attributes"`
+}
+
+// ClientServer represents a server from Client API perspective
+type ClientServer struct {
+	Object     string `json:"object"`
+	Attributes struct {
+		ServerOwner bool     `json:"server_owner"`
+		Identifier  string   `json:"identifier"`
+		UUID        string   `json:"uuid"`
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Status      string   `json:"status"`
+		InternalID  int      `json:"internal_id"`
+		Permissions []string `json:"permissions"`
+	} `json:"attributes"`
+}
+
+// ClientSubuser represents a subuser from Client API
+type ClientSubuser struct {
+	Object     string `json:"object"`
+	Attributes struct {
+		UUID             string   `json:"uuid"`
+		Username         string   `json:"username"`
+		Email            string   `json:"email"`
+		Image            string   `json:"image"`
+		TwoFactorEnabled bool     `json:"2fa_enabled"`
+		Permissions      []string `json:"permissions"`
+		CreatedAt        string   `json:"created_at"`
 	} `json:"attributes"`
 }
 
@@ -770,4 +800,82 @@ func containsQueryParams(path string) bool {
 		}
 	}
 	return false
+}
+
+// UpdateServerEnvironment updates environment variables for a server
+func (c *PterodactylClient) UpdateServerEnvironment(ctx context.Context, serverUUID string, envVars map[string]string) error {
+	path := fmt.Sprintf("/api/client/servers/%s/settings/environment", serverUUID)
+	body := map[string]map[string]string{"variables": envVars}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	resp, err := c.doClientRequest(ctx, "POST", path, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to update server environment: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update server environment: %d - %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// GetClientServers fetches servers accessible to the client API user
+func (c *PterodactylClient) GetClientServers(ctx context.Context) ([]ClientServer, error) {
+	if c.clientAPIKey == "" {
+		return nil, fmt.Errorf("client API key not configured")
+	}
+
+	resp, err := c.doClientRequest(ctx, "GET", "/servers", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Data []ClientServer `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
+// GetServerSubusers fetches subusers for a specific server (requires owner or admin)
+func (c *PterodactylClient) GetServerSubusers(ctx context.Context, serverUUID string) ([]ClientSubuser, error) {
+	if c.clientAPIKey == "" {
+		return nil, fmt.Errorf("client API key not configured")
+	}
+
+	path := fmt.Sprintf("/servers/%s/users", serverUUID)
+	resp, err := c.doClientRequest(ctx, "GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Data []ClientSubuser `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
 }

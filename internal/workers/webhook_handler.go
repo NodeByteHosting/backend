@@ -13,6 +13,7 @@ import (
 
 	"github.com/nodebyte/backend/internal/database"
 	"github.com/nodebyte/backend/internal/queue"
+	"github.com/nodebyte/backend/internal/sentry"
 )
 
 // WebhookHandler handles webhook dispatch tasks
@@ -73,8 +74,13 @@ type DiscordEmbedField struct {
 
 // HandleDiscordWebhook processes a Discord webhook task
 func (h *WebhookHandler) HandleDiscordWebhook(ctx context.Context, task *asynq.Task) error {
+	tx := sentry.StartBackgroundTransaction(ctx, "worker.discord_webhook")
+	defer tx.Finish()
+	ctx = tx.Context()
+
 	var payload queue.WebhookPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
+		sentry.CaptureExceptionWithContext(ctx, err, "unmarshal_webhook_payload")
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
 
@@ -89,6 +95,7 @@ func (h *WebhookHandler) HandleDiscordWebhook(ctx context.Context, task *asynq.T
 	query := `SELECT url, enabled FROM discord_webhooks WHERE id = $1`
 	err := h.db.Pool.QueryRow(ctx, query, payload.WebhookID).Scan(&webhookURL, &enabled)
 	if err != nil {
+		sentry.CaptureExceptionWithContext(ctx, err, "fetch_webhook")
 		return fmt.Errorf("failed to get webhook: %w", err)
 	}
 

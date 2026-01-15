@@ -50,6 +50,14 @@ func SetupRoutes(app *fiber.App, db *database.DB, queueManager *queue.Manager, a
 	app.Post("/api/v1/hytale/oauth/game-session/refresh", gameSessionLimiter.Middleware(), hytaleOAuthHandler.RefreshGameSession)
 	app.Post("/api/v1/hytale/oauth/game-session/delete", gameSessionLimiter.Middleware(), hytaleOAuthHandler.TerminateGameSession)
 
+	hytaleLogsHandler := NewHytaleLogsHandler(db)
+	app.Get("/api/v1/hytale/logs", hytaleLogsHandler.GetHytaleLogs)
+
+	hytaleServerLogsHandler := NewHytaleServerLogsHandler(db)
+	app.Get("/api/v1/hytale/server-logs", hytaleServerLogsHandler.GetHytaleServerLogs)
+	app.Post("/api/v1/hytale/server-logs", hytaleServerLogsHandler.CreateServerLogs)
+	app.Get("/api/v1/hytale/server-logs/count", hytaleServerLogsHandler.GetHytaleServerLogsCount)
+
 	// Admin settings routes (require bearer token auth) - MUST BE BEFORE /api group
 	bearerAuth := NewBearerAuthMiddleware(db)
 	adminGroup := app.Group("/api/admin", bearerAuth.Handler())

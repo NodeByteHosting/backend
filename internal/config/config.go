@@ -47,13 +47,11 @@ type Config struct {
 	EmailFrom    string
 
 	// Sync settings
-	SyncBatchSize    int
-	AutoSyncEnabled  bool
-	AutoSyncInterval int // in seconds (loaded from database or env; env can be in minutes/seconds)
-
-	// Scalar (feature/config platform)
-	ScalarURL    string
-	ScalarAPIKey string
+	SyncBatchSize         int
+	AutoSyncEnabled       bool
+	AutoSyncInterval      int // in seconds (loaded from database or env; env can be in minutes/seconds)
+	SyncSubusersEnabled   bool
+	SyncSubusersBatchSize int
 
 	// Hytale OAuth
 	HytaleUseStaging bool
@@ -88,12 +86,11 @@ func Load() (*Config, error) {
 		EmailFrom:    getEnv("EMAIL_FROM", "NodeByte <noreply@nodebyte.host>"),
 
 		// Sync
-		SyncBatchSize:    getEnvInt("SYNC_BATCH_SIZE", 100),
-		AutoSyncEnabled:  getEnvBool("AUTO_SYNC_ENABLED", false),
-		AutoSyncInterval: getEnvInt("AUTO_SYNC_INTERVAL", 3600) * 60, // Env in minutes (converted to seconds)
-		// Scalar
-		ScalarURL:    os.Getenv("SCALAR_URL"),
-		ScalarAPIKey: os.Getenv("SCALAR_API_KEY"),
+		SyncBatchSize:         getEnvInt("SYNC_BATCH_SIZE", 100),
+		AutoSyncEnabled:       getEnvBool("AUTO_SYNC_ENABLED", false),
+		AutoSyncInterval:      getEnvInt("AUTO_SYNC_INTERVAL", 3600) * 60, // Env in minutes (converted to seconds)
+		SyncSubusersEnabled:   getEnvBool("SYNC_SUBUSERS_ENABLED", true),
+		SyncSubusersBatchSize: getEnvInt("SYNC_SUBUSERS_BATCH_SIZE", 25),
 
 		// Hytale
 		HytaleUseStaging: getEnvBool("HYTALE_USE_STAGING", false),
@@ -223,14 +220,6 @@ func (cfg *Config) MergeFromDB(db *database.DB, encryptor *crypto.Encryptor) err
 			// Database stores interval in seconds
 			if n, err := strconv.Atoi(value); err == nil && n > 0 {
 				cfg.AutoSyncInterval = n
-			}
-		case "scalar_url":
-			if value != "" {
-				cfg.ScalarURL = value
-			}
-		case "scalar_api_key":
-			if value != "" {
-				cfg.ScalarAPIKey = value
 			}
 		}
 	}

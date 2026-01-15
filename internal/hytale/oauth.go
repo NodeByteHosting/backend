@@ -248,29 +248,34 @@ func (c *OAuthClient) CreateGameSession(ctx context.Context, accessToken string,
 	return &sessionResp, nil
 }
 
-// RefreshGameSession refreshes an existing game session
-func (c *OAuthClient) RefreshGameSession(ctx context.Context, sessionToken string) error {
+// RefreshGameSession refreshes an existing game session and returns the new tokens
+func (c *OAuthClient) RefreshGameSession(ctx context.Context, sessionToken string) (*GameSessionResponse, error) {
 	endpoint := c.getSessionEndpoint("/game-session/refresh")
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", sessionToken))
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to refresh game session: %w", err)
+		return nil, fmt.Errorf("failed to refresh game session: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("hytale returned %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("hytale returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	return nil
+	var sessionResp GameSessionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&sessionResp); err != nil {
+		return nil, fmt.Errorf("failed to decode game session response: %w", err)
+	}
+
+	return &sessionResp, nil
 }
 
 // TerminateGameSession terminates a game session

@@ -128,3 +128,10 @@ type TerminateGameSessionResponseDTO struct {
 	Message string `json:"message,omitempty" example:"Game session terminated successfully"`
 	Error   string `json:"error,omitempty"`
 }
+
+// GetHytaleLogsResponse represents a response containing Hytale audit logs
+type GetHytaleLogsResponse struct {
+	Success bool        `json:"success" example:"true"`
+	Logs    interface{} `json:"logs" description:"Array of Hytale audit log entries"`
+	Count   int         `json:"count" example:"50"`
+}

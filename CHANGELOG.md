@@ -7,27 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
-- Partial sync capabilities (sync specific resource types)
-- Webhook event filtering and delivery guarantees
-- Prometheus metrics export
-- gRPC API for internal communication
-- Support for additional panel integrations (Game Panel Pro, Wings)
-- API documentation for Game Server Providers (GSPs)
-- Downloader CLI integration guide
-- Customer authentication flow documentation
-
-## [0.2.1] - Unreleased
+## [0.2.1] - 2026-01-14
 
 ### Added
-- **Sentry Error Tracking Integration** - Production error monitoring
-  - Optional Sentry SDK integration for real-time error tracking
+- **Sentry Error Tracking Integration** - Production error monitoring and performance tracking
+  - Optional Sentry SDK integration for real-time error tracking and transaction monitoring
   - Fiber middleware for automatic panic recovery and error reporting
   - `SENTRY_DSN` environment variable configuration
   - Request context preservation with tags and custom data
   - Helper functions for manual error capture (`sentry.CaptureException`, `sentry.CaptureMessage`)
+  - Transaction tracking with smart sampling (10% default)
+  - Error classification and context enhancement (`CaptureErrorWithContext`)
   - 5-second timeout during graceful shutdown for pending event delivery
-  - 10% transaction trace sampling for performance monitoring
+  - **Custom Instrumentation Helpers** for detailed performance monitoring
+    - `StartSpan()` - Create child spans within transactions
+    - `GetTransactionFromContext()` - Access active transactions from any context
+    - `GetSpanFromContext()` - Access active spans from any context
+    - `CaptureExceptionWithContext()` - Capture errors in background workers without Fiber context
+  - **Background Worker Transaction Tracking**
+    - `worker.refresh_oauth_tokens` - OAuth token refresh operations (every 5 minutes)
+    - `worker.refresh_game_sessions` - Game session refresh checks (every 5 minutes)
+    - `worker.cleanup_expired_sessions` - Session cleanup operations (daily at 2 AM)
+    - `worker.full_sync` - Pterodactyl panel synchronization jobs
+    - `worker.discord_webhook` - Discord webhook dispatch operations
+- **Hytale Game Session Enhancements** - Improved session lifecycle management
+  - Game session refresh interval changed to every 5 minutes
+  - Sessions are refreshed when 5 minutes before expiry
+  - Session token refresh returns new `sessionToken` and `identityToken` from Hytale
+  - Database method to update session tokens after refresh (`UpdateGameSessionTokens`)
+  - Pterodactyl API integration to push refreshed tokens to panel servers
+  - New `UpdateServerEnvironment` method for updating environment variables via Pterodactyl client API
+  - Sentry transaction tracking for all session refresh operations
+- **Hytale Audit Logs API** - New endpoint for retrieving Hytale OAuth event logs
+  - `GET /api/v1/hytale/logs?account_id={id}&limit={limit}` endpoint
+  - Query parameter validation (max 1000 logs per request)
+  - Returns audit logs with event types (TOKEN_CREATED, TOKEN_REFRESHED, SESSION_CREATED, etc.)
+  - Supports filtering by account ID
 - **Comprehensive Unit Test Suite** - Core packages tested for reliability
   - Config loading and environment variable parsing tests
   - Error handling and HTTP status mapping tests
@@ -41,18 +56,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Multi-workflow setup: test-build, format, docker, dependencies, coverage
   - HTML coverage reports uploaded to GitHub artifacts
   - Coverage comments on pull requests with metrics
+- **Dual API Integration**: Full Pterodactyl Client API support for user-server relationships
+  - New `server_subusers` table tracking user access to servers with permissions
+  - `GetClientServers()` method to fetch servers via Client API
+  - `GetServerSubusers()` method to fetch subusers for specific servers
+  - `syncServerSubusers()` sync method integrating Client API data into database
+  - Configurable subuser sync (enabled by default, 25 servers per batch)
+  - Automatic owner marking in server_subusers table
+  - Rate limiting with 2-second delays between batches
+  - New config options: `SYNC_SUBUSERS_ENABLED`, `SYNC_SUBUSERS_BATCH_SIZE`
+  - Client API types: `ClientServer` and `ClientSubuser` structs
+- **Hytale Game Server Log Persistence** - Automatic backup of console logs to database
+  - Background worker periodically fetches logs from Hytale API (every 5 minutes)
+  - Persistent storage in PostgreSQL with sync state tracking to prevent duplicates
+  - Automatic cleanup of logs older than 30 days (runs daily at 4 AM)
+  - API endpoints for historical log retrieval:
+    - `GET /api/v1/hytale/server-logs` - Retrieve paginated logs for a game server
+    - `GET /api/v1/hytale/server-logs/count` - Get total log count for a server
+  - Sync state tracking to monitor last successful sync and handle API errors gracefully
+  - Sentry transaction tracking for log persistence operations
 
 ### Changed
+- **Sentry SDK Configuration** - SDK API compatibility improvements
+  - TracesSampler now correctly returns `float64` instead of `sentry.Sampled`
+  - Event tags use `event.Tags` map directly instead of `SetTag()` method
+  - Span operations properly initialized with `WithOpName` and `WithTransactionSource` options
+  - Structured logging integration enabled (`EnableLogs: true`) for automatic log capture
 - **Workflow Reliability** - Fixed workflow configuration issues
   - Updated deprecated artifact actions (v3 → v4)
   - Added continue-on-error flags to linting steps to prevent false failures
   - Fixed gofmt check to use `gofmt -l` instead of `go fmt ./...` (non-destructive)
   - Added PR-conditional GitHub script execution to prevent undefined context errors
   - PostgreSQL readiness check added to coverage workflow for test database setup
+  - Full sync now includes server subusers as Step 7 (non-blocking, continues on failure)
+  - Progress tracking updated to 85% for subuser sync step
+  - Config struct extended with `SyncSubusersEnabled` and `SyncSubusersBatchSize` fields
 
 ### Fixed
+- **Hytale OAuth Handler** - Corrected return value handling
+  - RefreshGameSession handler now properly captures 2 return values from oauth client (`sessionResp`, `err`)
+  - New tokens are now persisted to database immediately after refresh
 - **Test Compatibility** - Aligned tests with actual implementation
   - Fixed OAuth endpoint URL format to match `https://oauth.accounts.{host}` pattern
+- **Sentry Background Worker Panic** - Fixed nil pointer dereference in background jobs
+  - Added `StartBackgroundTransaction()` function for workers without HTTP context
+  - Updated `StartTransaction()` to handle nil fiber.Ctx gracefully
+  - Fixed 6 worker functions: `RefreshOAuthTokens`, `RefreshGameSessions`, `CleanupExpiredSessions`, `CleanupOldLogs`, `HandleDiscordWebhook`, `HandleFullSync`
+  - All background jobs now use proper Sentry transaction tracking with `task` operation type
+- **Sync Progress Updates** - Enhanced frontend polling visibility
+  - Added `lastMessage` field to all sync progress updates for real-time status display
+  - Standardized status values to `RUNNING` (was inconsistently `in_progress`)
+  - Progress updates now include user-friendly messages like "Syncing locations...", "Syncing nodes...", etc.
+  - Added `lastUpdated` timestamp to metadata for frontend polling
+- **Config Validation** - Removed duplicate field declarations
+  - Fixed duplicate `SyncSubusersEnabled` and `SyncSubusersBatchSize` fields in Config struct
   - Corrected rate limiter Allow() return types (int vs int64)
   - Fixed test expectations for rate limiter cleanup behavior
   - Removed tests for private/unexported functions

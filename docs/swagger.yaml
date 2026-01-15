@@ -139,6 +139,22 @@ definitions:
         example: true
         type: boolean
     type: object
+  types.CreateServerLogsRequest:
+    properties:
+      account_id:
+        description: Account ID of the server owner
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      logs:
+        description: Array of log lines to store
+        items:
+          $ref: '#/definitions/types.LogEntry'
+        type: array
+      server_uuid:
+        description: Server UUID (for Hytale servers, this is the profile UUID)
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+    type: object
   types.DeviceCodeRequest:
     properties:
       account_id:
@@ -198,6 +214,16 @@ definitions:
         example: eyJhbGciOiJFZERTQSJ9...
         type: string
     type: object
+  types.GetHytaleLogsResponse:
+    properties:
+      count:
+        example: 50
+        type: integer
+      logs: {}
+      success:
+        example: true
+        type: boolean
+    type: object
   types.GetProfilesRequest:
     properties:
       account_id:
@@ -219,6 +245,17 @@ definitions:
       success:
         example: true
         type: boolean
+    type: object
+  types.LogEntry:
+    properties:
+      line:
+        description: Log line content
+        example: '[10:30:45] Server started successfully'
+        type: string
+      timestamp:
+        description: Optional timestamp (defaults to now)
+        example: "2026-01-14T10:30:45Z"
+        type: string
     type: object
   types.PollTokenRequest:
     properties:
@@ -282,8 +319,25 @@ definitions:
         example: 550e8400-e29b-41d4-a716-446655440001
         type: string
     type: object
+  types.ServerLog:
+    properties:
+      id:
+        description: Log entry ID
+        example: 1
+        type: integer
+      line:
+        description: Log line content
+        example: '[10:30:45] Server started successfully'
+        type: string
+      timestamp:
+        description: When the log was created
+        example: "2026-01-14T10:30:45Z"
+        type: string
+    type: object
   types.SuccessResponse:
     properties:
+      data:
+        description: Response data (generic for various endpoints)
       message:
         description: Optional message
         example: Operation completed successfully
@@ -1061,6 +1115,39 @@ paths:
       summary: Queue email
       tags:
       - Email
+  /api/v1/hytale/logs:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves audit logs for a specific Hytale account
+      parameters:
+      - description: Account UUID
+        in: query
+        name: account_id
+        required: true
+        type: string
+      - description: 'Maximum number of logs (default: 100, max: 1000)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/types.GetHytaleLogsResponse'
+        "400":
+          description: Missing account_id or invalid parameters
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+      summary: Get Hytale Audit Logs
+      tags:
+      - Hytale Logs
   /api/v1/hytale/oauth/device-code:
     post:
       consumes:
@@ -1325,6 +1412,118 @@ paths:
       summary: Poll for Token
       tags:
       - Hytale OAuth
+  /api/v1/hytale/server-logs:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves stored console output logs from a Hytale game server
+      parameters:
+      - description: Server UUID
+        in: query
+        name: server_uuid
+        required: true
+        type: string
+      - description: 'Maximum logs to return (default: 100, max: 1000)'
+        in: query
+        name: limit
+        type: integer
+      - description: 'Offset for pagination (default: 0)'
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Server logs retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/types.SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/types.ServerLog'
+                  type: array
+              type: object
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "404":
+          description: Server not found
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+      summary: Get Hytale game server logs
+      tags:
+      - Hytale Logs
+    post:
+      consumes:
+      - application/json
+      description: Stores console output logs sent from Wings daemon or Panel
+      parameters:
+      - description: Logs to store
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/types.CreateServerLogsRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Logs stored successfully
+          schema:
+            $ref: '#/definitions/types.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+      summary: Create game server logs
+      tags:
+      - Hytale Logs
+  /api/v1/hytale/server-logs/count:
+    get:
+      consumes:
+      - application/json
+      description: Returns the total number of stored logs for a specific server
+      parameters:
+      - description: Server UUID
+        in: query
+        name: server_uuid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Log count retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/types.SuccessResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+      summary: Get Hytale server logs count
+      tags:
+      - Hytale Logs
   /api/v1/queues/stats:
     get:
       consumes:

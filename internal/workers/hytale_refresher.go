@@ -9,38 +9,47 @@ import (
 
 	"github.com/nodebyte/backend/internal/database"
 	"github.com/nodebyte/backend/internal/hytale"
+	"github.com/nodebyte/backend/internal/panels"
+	"github.com/nodebyte/backend/internal/sentry"
 )
 
 // HytaleRefresher handles Hytale token and session refresh operations
 type HytaleRefresher struct {
-	db          *database.DB
-	oauthRepo   *database.HytaleOAuthRepository
-	oauthClient *hytale.OAuthClient
+	db                *database.DB
+	oauthRepo         *database.HytaleOAuthRepository
+	oauthClient       *hytale.OAuthClient
+	pterodactylClient *panels.PterodactylClient
 }
 
 // NewHytaleRefresher creates a new Hytale refresher
-func NewHytaleRefresher(db *database.DB, useStaging bool) *HytaleRefresher {
+func NewHytaleRefresher(db *database.DB, pteroClient *panels.PterodactylClient, useStaging bool) *HytaleRefresher {
 	oauthClient := hytale.NewOAuthClient(&hytale.OAuthClientConfig{
 		ClientID:   "hytale-server",
 		UseStaging: useStaging,
 	})
 
 	return &HytaleRefresher{
-		db:          db,
-		oauthRepo:   database.NewHytaleOAuthRepository(db),
-		oauthClient: oauthClient,
+		db:                db,
+		oauthRepo:         database.NewHytaleOAuthRepository(db),
+		oauthClient:       oauthClient,
+		pterodactylClient: pteroClient,
 	}
 }
 
 // RefreshOAuthTokens refreshes all OAuth tokens that are expiring soon
 // Called by scheduler every 5 minutes
 func (r *HytaleRefresher) RefreshOAuthTokens(ctx context.Context) error {
+	tx := sentry.StartBackgroundTransaction(ctx, "worker.refresh_oauth_tokens")
+	defer tx.Finish()
+	ctx = tx.Context()
+
 	log.Debug().Msg("Starting OAuth token refresh check")
 
 	// Get all tokens from database
 	tokens, err := r.oauthRepo.GetAllOAuthTokens(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to fetch OAuth tokens for refresh")
+		sentry.CaptureExceptionWithContext(ctx, err, "fetch_oauth_tokens")
 		return err
 	}
 
@@ -77,9 +86,13 @@ func (r *HytaleRefresher) RefreshOAuthTokens(ctx context.Context) error {
 
 // refreshSingleToken refreshes a single OAuth token
 func (r *HytaleRefresher) refreshSingleToken(ctx context.Context, token *database.HytaleOAuthToken) error {
+	span := sentry.StartSpan(ctx, "refresh_oauth_token", token.AccountID)
+	defer span.Finish()
+
 	// Refresh token with Hytale
-	tokenResp, err := r.oauthClient.RefreshToken(ctx, token.RefreshToken)
+	tokenResp, err := r.oauthClient.RefreshToken(span.Context(), token.RefreshToken)
 	if err != nil {
+		sentry.CaptureExceptionWithContext(span.Context(), err, "hytale_refresh_token")
 		return fmt.Errorf("failed to refresh token: %w", err)
 	}
 
@@ -95,7 +108,8 @@ func (r *HytaleRefresher) refreshSingleToken(ctx context.Context, token *databas
 	token.AccessTokenExpiry = expiresAt
 	token.Scope = tokenResp.Scope
 
-	if err := r.oauthRepo.SaveOAuthToken(ctx, token); err != nil {
+	if err := r.oauthRepo.SaveOAuthToken(span.Context(), token); err != nil {
+		sentry.CaptureExceptionWithContext(span.Context(), err, "save_oauth_token")
 		return fmt.Errorf("failed to save updated token: %w", err)
 	}
 
@@ -108,14 +122,19 @@ func (r *HytaleRefresher) refreshSingleToken(ctx context.Context, token *databas
 }
 
 // RefreshGameSessions refreshes all game sessions that are expiring soon
-// Called by scheduler every 10 minutes
+// Called by scheduler every 5 minutes (checks if session expires within 5 minutes)
 func (r *HytaleRefresher) RefreshGameSessions(ctx context.Context) error {
+	tx := sentry.StartBackgroundTransaction(ctx, "worker.refresh_game_sessions")
+	defer tx.Finish()
+	ctx = tx.Context()
+
 	log.Debug().Msg("Starting game session refresh check")
 
 	// Get all game sessions from database
 	sessions, err := r.oauthRepo.GetAllGameSessions(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to fetch game sessions for refresh")
+		sentry.CaptureExceptionWithContext(ctx, err, "fetch_game_sessions")
 		return err
 	}
 
@@ -126,12 +145,12 @@ func (r *HytaleRefresher) RefreshGameSessions(ctx context.Context) error {
 
 	log.Debug().Int("session_count", len(sessions)).Msg("Checking game sessions for refresh")
 
-	// Refresh sessions expiring in next 5 minutes
-	// Game sessions expire in 1 hour, so refresh at 55 minute mark
+	// Refresh sessions if they expire within next 5 minutes
+	// Game sessions expire in 1 hour, so refresh when created_at + 55 minutes has passed
 	now := time.Now()
 
 	for _, session := range sessions {
-		// Check if session is about to expire (created_at + 55 minutes >= now)
+		// Check if session is about to expire (within 5 minutes of the 1-hour mark)
 		createdAt := session.CreatedAt
 		expiryTime := createdAt.Add(55 * time.Minute)
 
@@ -158,14 +177,18 @@ func (r *HytaleRefresher) RefreshGameSessions(ctx context.Context) error {
 
 // refreshSingleSession refreshes a single game session
 func (r *HytaleRefresher) refreshSingleSession(ctx context.Context, session *database.HytaleGameSession) error {
-	// Refresh session with Hytale
-	if err := r.oauthClient.RefreshGameSession(ctx, session.SessionToken); err != nil {
+	span := sentry.StartSpan(ctx, "refresh_game_session", session.AccountID)
+	defer span.Finish()
+
+	sessionResp, err := r.oauthClient.RefreshGameSession(span.Context(), session.SessionToken)
+	if err != nil {
+		sentry.CaptureExceptionWithContext(span.Context(), err, "hytale_refresh_session")
 		return fmt.Errorf("failed to refresh session: %w", err)
 	}
 
-	// Update the refresh timestamp in database
-	if err := r.oauthRepo.UpdateGameSessionRefresh(ctx, session.AccountID, session.ProfileUUID); err != nil {
-		return fmt.Errorf("failed to update session refresh time: %w", err)
+	if err := r.oauthRepo.UpdateGameSessionTokens(span.Context(), session.AccountID, session.ProfileUUID, sessionResp.SessionToken, sessionResp.IdentityToken); err != nil {
+		sentry.CaptureExceptionWithContext(span.Context(), err, "update_session_tokens")
+		return fmt.Errorf("failed to update session tokens: %w", err)
 	}
 
 	log.Info().
@@ -179,12 +202,17 @@ func (r *HytaleRefresher) refreshSingleSession(ctx context.Context, session *dat
 // CleanupExpiredSessions removes game sessions that have been inactive for 2 hours
 // Called by scheduler daily at 2 AM
 func (r *HytaleRefresher) CleanupExpiredSessions(ctx context.Context) error {
+	tx := sentry.StartBackgroundTransaction(ctx, "worker.cleanup_expired_sessions")
+	defer tx.Finish()
+	ctx = tx.Context()
+
 	log.Debug().Msg("Starting expired game session cleanup")
 
 	// Get all game sessions
 	sessions, err := r.oauthRepo.GetAllGameSessions(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to fetch game sessions for cleanup")
+		sentry.CaptureExceptionWithContext(ctx, err, "fetch_sessions_cleanup")
 		return err
 	}
 
@@ -223,6 +251,7 @@ func (r *HytaleRefresher) CleanupExpiredSessions(ctx context.Context) error {
 					Str("account_id", session.AccountID).
 					Str("profile_uuid", session.ProfileUUID).
 					Msg("Failed to delete inactive game session")
+				sentry.CaptureExceptionWithContext(ctx, err, "delete_session")
 				continue
 			}
 

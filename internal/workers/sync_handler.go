@@ -16,6 +16,7 @@ import (
 	"github.com/nodebyte/backend/internal/database"
 	"github.com/nodebyte/backend/internal/panels"
 	"github.com/nodebyte/backend/internal/queue"
+	"github.com/nodebyte/backend/internal/sentry"
 )
 
 // SyncHandler handles sync-related tasks
@@ -38,8 +39,13 @@ func NewSyncHandler(db *database.DB, pteroClient *panels.PterodactylClient, cfg 
 
 // HandleFullSync processes a full sync task
 func (h *SyncHandler) HandleFullSync(ctx context.Context, task *asynq.Task) error {
+	tx := sentry.StartBackgroundTransaction(ctx, "worker.full_sync")
+	defer tx.Finish()
+	ctx = tx.Context()
+
 	var payload queue.SyncFullPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
+		sentry.CaptureExceptionWithContext(ctx, err, "unmarshal_payload")
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
 
@@ -112,10 +118,20 @@ func (h *SyncHandler) HandleFullSync(ctx context.Context, task *asynq.Task) erro
 		if checkCancelled() {
 			return h.cancelSync(ctx, payload.SyncLogID, "Cancelled before users sync")
 		}
-		h.updateProgress(ctx, payload.SyncLogID, "users", 80)
+		h.updateProgress(ctx, payload.SyncLogID, "users", 75)
 		if err := h.syncUsers(ctx, payload.SyncLogID); err != nil {
 			return h.failSync(ctx, payload.SyncLogID, "users", err)
 		}
+	}
+
+	// Step 7: Sync Server Subusers (Client API - selective)
+	if checkCancelled() {
+		return h.cancelSync(ctx, payload.SyncLogID, "Cancelled before subusers sync")
+	}
+	h.updateProgress(ctx, payload.SyncLogID, "subusers", 85)
+	if err := h.syncServerSubusers(ctx, payload.SyncLogID); err != nil {
+		log.Warn().Err(err).Msg("Subuser sync failed - continuing with full sync")
+		// Don't fail entire sync if subusers fail
 	}
 
 	// Calculate duration
@@ -948,12 +964,156 @@ func (h *SyncHandler) syncUsers(ctx context.Context, syncLogID string) error {
 	return nil
 }
 
+func (h *SyncHandler) syncServerSubusers(ctx context.Context, syncLogID string) error {
+	log.Debug().Str("sync_log_id", syncLogID).Msg("Syncing server subusers via Client API")
+
+	// Only sync if client API key is configured
+	if h.cfg.PterodactylClientAPIKey == "" {
+		log.Info().Msg("Skipping subuser sync - client API key not configured")
+		h.updateDetailedProgress(ctx, syncLogID, "subusers", 0, 0, "⊘ Skipped - client API key not configured")
+		return nil
+	}
+
+	// Check if subuser sync is enabled
+	if !h.cfg.SyncSubusersEnabled {
+		log.Info().Msg("Skipping subuser sync - disabled in config")
+		h.updateDetailedProgress(ctx, syncLogID, "subusers", 0, 0, "⊘ Skipped - disabled in config")
+		return nil
+	}
+
+	// Get servers that need subuser sync (owned by panel admin)
+	rows, err := h.db.Pool.Query(ctx, `
+		SELECT s.id, s.uuid 
+		FROM servers s
+		JOIN users u ON s."ownerId" = u.id
+		WHERE u."isPterodactylAdmin" = true
+		  AND s.uuid IS NOT NULL
+		LIMIT $1
+	`, h.cfg.SyncSubusersBatchSize)
+	if err != nil {
+		return fmt.Errorf("failed to fetch admin servers: %w", err)
+	}
+	defer rows.Close()
+
+	var servers []struct {
+		ID   string
+		UUID string
+	}
+	for rows.Next() {
+		var s struct {
+			ID   string
+			UUID string
+		}
+		if err := rows.Scan(&s.ID, &s.UUID); err != nil {
+			continue
+		}
+		servers = append(servers, s)
+	}
+
+	if len(servers) == 0 {
+		log.Info().Msg("No admin-owned servers found for subuser sync")
+		h.updateDetailedProgress(ctx, syncLogID, "subusers", 0, 0, "⊘ No admin-owned servers found")
+		return nil
+	}
+
+	h.updateDetailedProgress(ctx, syncLogID, "subusers", len(servers), 0,
+		fmt.Sprintf("Syncing subusers for %d admin-owned servers", len(servers)))
+
+	totalSubusers := 0
+	for i, server := range servers {
+		// Add delay between requests to respect rate limits
+		if i > 0 && i%5 == 0 {
+			time.Sleep(2 * time.Second)
+		}
+
+		// Fetch subusers via Client API
+		subusers, err := h.pteroClient.GetServerSubusers(ctx, server.UUID)
+		if err != nil {
+			log.Warn().Err(err).Str("server_uuid", server.UUID).
+				Msg("Failed to fetch subusers - skipping server")
+			continue
+		}
+
+		// Upsert subusers
+		for _, subuser := range subusers {
+			// Find user by email
+			var userID string
+			err := h.db.Pool.QueryRow(ctx,
+				`SELECT id FROM users WHERE email = $1`, subuser.Attributes.Email).
+				Scan(&userID)
+			if err != nil {
+				log.Debug().Str("email", subuser.Attributes.Email).
+					Msg("Subuser not found in users table - may need full user sync first")
+				continue
+			}
+
+			// Insert subuser relationship
+			_, err = h.db.Pool.Exec(ctx, `
+				INSERT INTO server_subusers (
+					id, server_id, user_id, permissions, is_owner, last_synced_at
+				) VALUES (
+					gen_random_uuid(), $1, $2, $3, false, NOW()
+				)
+				ON CONFLICT (server_id, user_id) DO UPDATE SET
+					permissions = EXCLUDED.permissions,
+					is_owner = EXCLUDED.is_owner,
+					last_synced_at = NOW()
+			`, server.ID, userID, subuser.Attributes.Permissions)
+
+			if err != nil {
+				log.Warn().Err(err).Str("email", subuser.Attributes.Email).
+					Msg("Failed to upsert subuser")
+			} else {
+				totalSubusers++
+			}
+		}
+
+		// Also mark owner in server_subusers table
+		_, err = h.db.Pool.Exec(ctx, `
+			INSERT INTO server_subusers (
+				id, server_id, user_id, permissions, is_owner, last_synced_at
+			) VALUES (
+				gen_random_uuid(), $1, 
+				(SELECT "ownerId" FROM servers WHERE id = $1),
+				ARRAY['*'], true, NOW()
+			)
+			ON CONFLICT (server_id, user_id) DO UPDATE SET
+				is_owner = true,
+				permissions = ARRAY['*'],
+				last_synced_at = NOW()
+		`, server.ID)
+
+		if err != nil {
+			log.Warn().Err(err).Str("server_id", server.ID).Msg("Failed to mark owner")
+		}
+
+		// Update progress every 5 servers
+		if (i+1)%5 == 0 || i == len(servers)-1 {
+			h.updateDetailedProgress(ctx, syncLogID, "subusers", len(servers), i+1,
+				fmt.Sprintf("Processed %d/%d servers (%d subusers)", i+1, len(servers), totalSubusers))
+		}
+	}
+
+	log.Info().Int("servers", len(servers)).Int("subusers", totalSubusers).Msg("Synced server subusers")
+	h.updateDetailedProgress(ctx, syncLogID, "subusers", len(servers), len(servers),
+		fmt.Sprintf("✓ Synced %d subusers across %d servers", totalSubusers, len(servers)))
+	return nil
+}
+
 // Helper methods
 
 func (h *SyncHandler) updateProgress(ctx context.Context, syncLogID, step string, progress int) {
-	h.syncRepo.UpdateSyncLog(ctx, syncLogID, "in_progress", nil, nil, nil, map[string]interface{}{
-		"step":     step,
-		"progress": progress,
+	// Generate a user-friendly message for the step
+	message := fmt.Sprintf("Syncing %s...", step)
+	if progress == 100 {
+		message = "Sync completed"
+	}
+
+	h.syncRepo.UpdateSyncLog(ctx, syncLogID, "RUNNING", nil, nil, nil, map[string]interface{}{
+		"step":        step,
+		"progress":    progress,
+		"lastMessage": message,
+		"lastUpdated": time.Now().Unix(),
 	})
 }
 

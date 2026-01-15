@@ -1120,6 +1120,56 @@
                 }
             }
         },
+        "/api/v1/hytale/logs": {
+            "get": {
+                "description": "Retrieves audit logs for a specific Hytale account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale Logs"
+                ],
+                "summary": "Get Hytale Audit Logs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account UUID",
+                        "name": "account_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of logs (default: 100, max: 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/types.GetHytaleLogsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing account_id or invalid parameters",
+                        "schema": {
+                            "$ref": "#/definitions/types.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/types.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/hytale/oauth/device-code": {
             "post": {
                 "description": "Initiates OAuth 2.0 Device Code Flow for Hytale server authentication",
@@ -1511,6 +1561,184 @@
                     },
                     "400": {
                         "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/types.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/types.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/hytale/server-logs": {
+            "get": {
+                "description": "Retrieves stored console output logs from a Hytale game server",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale Logs"
+                ],
+                "summary": "Get Hytale game server logs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Server UUID",
+                        "name": "server_uuid",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum logs to return (default: 100, max: 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset for pagination (default: 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Server logs retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/types.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/types.ServerLog"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/types.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Server not found",
+                        "schema": {
+                            "$ref": "#/definitions/types.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/types.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Stores console output logs sent from Wings daemon or Panel",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale Logs"
+                ],
+                "summary": "Create game server logs",
+                "parameters": [
+                    {
+                        "description": "Logs to store",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.CreateServerLogsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Logs stored successfully",
+                        "schema": {
+                            "$ref": "#/definitions/types.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/types.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/types.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/hytale/server-logs/count": {
+            "get": {
+                "description": "Returns the total number of stored logs for a specific server",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Hytale Logs"
+                ],
+                "summary": "Get Hytale server logs count",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Server UUID",
+                        "name": "server_uuid",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Log count retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/types.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
                         "schema": {
                             "$ref": "#/definitions/types.ErrorResponse"
                         }
@@ -2290,6 +2518,28 @@
                 }
             }
         },
+        "types.CreateServerLogsRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "description": "Account ID of the server owner",
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "logs": {
+                    "description": "Array of log lines to store",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.LogEntry"
+                    }
+                },
+                "server_uuid": {
+                    "description": "Server UUID (for Hytale servers, this is the profile UUID)",
+                    "type": "string",
+                    "example": "123e4567-e89b-12d3-a456-426614174000"
+                }
+            }
+        },
         "types.DeviceCodeRequest": {
             "type": "object",
             "properties": {
@@ -2371,6 +2621,20 @@
                 }
             }
         },
+        "types.GetHytaleLogsResponse": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "example": 50
+                },
+                "logs": {},
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
         "types.GetProfilesRequest": {
             "type": "object",
             "properties": {
@@ -2400,6 +2664,21 @@
                 "success": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "types.LogEntry": {
+            "type": "object",
+            "properties": {
+                "line": {
+                    "description": "Log line content",
+                    "type": "string",
+                    "example": "[10:30:45] Server started successfully"
+                },
+                "timestamp": {
+                    "description": "Optional timestamp (defaults to now)",
+                    "type": "string",
+                    "example": "2026-01-14T10:30:45Z"
                 }
             }
         },
@@ -2489,9 +2768,32 @@
                 }
             }
         },
+        "types.ServerLog": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "Log entry ID",
+                    "type": "integer",
+                    "example": 1
+                },
+                "line": {
+                    "description": "Log line content",
+                    "type": "string",
+                    "example": "[10:30:45] Server started successfully"
+                },
+                "timestamp": {
+                    "description": "When the log was created",
+                    "type": "string",
+                    "example": "2026-01-14T10:30:45Z"
+                }
+            }
+        },
         "types.SuccessResponse": {
             "type": "object",
             "properties": {
+                "data": {
+                    "description": "Response data (generic for various endpoints)"
+                },
                 "message": {
                     "description": "Optional message",
                     "type": "string",

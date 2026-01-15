@@ -573,7 +573,8 @@ func (h *HytaleOAuthHandler) RefreshGameSession(c *fiber.Ctx) error {
 	}
 
 	// Refresh session with Hytale
-	if err := h.oauthClient.RefreshGameSession(c.Context(), gameSession.SessionToken); err != nil {
+	sessionResp, err := h.oauthClient.RefreshGameSession(c.Context(), gameSession.SessionToken)
+	if err != nil {
 		log.Error().Err(err).
 			Str("account_id", req.AccountID).
 			Str("profile_uuid", profileUUID).
@@ -581,6 +582,17 @@ func (h *HytaleOAuthHandler) RefreshGameSession(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(types.ErrorResponse{
 			Success: false,
 			Error:   "Failed to refresh game session",
+		})
+	}
+
+	if err := h.oauthRepo.UpdateGameSessionTokens(c.Context(), req.AccountID, profileUUID, sessionResp.SessionToken, sessionResp.IdentityToken); err != nil {
+		log.Error().Err(err).
+			Str("account_id", req.AccountID).
+			Str("profile_uuid", profileUUID).
+			Msg("Failed to update game session tokens")
+		return c.Status(http.StatusInternalServerError).JSON(types.ErrorResponse{
+			Success: false,
+			Error:   "Failed to update session tokens",
 		})
 	}
 

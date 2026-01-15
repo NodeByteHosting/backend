@@ -247,3 +247,14 @@ func (r *HytaleOAuthRepository) UpdateGameSessionRefresh(ctx context.Context, ac
 	)
 	return err
 }
+
+// UpdateGameSessionTokens updates the session and identity tokens for a game session
+func (r *HytaleOAuthRepository) UpdateGameSessionTokens(ctx context.Context, accountID, profileUUID, sessionToken, identityToken string) error {
+	_, err := r.db.Pool.Exec(ctx,
+		`UPDATE hytale_game_sessions 
+		SET session_token = $3, identity_token = $4, updated_at = $5
+		WHERE account_id = $1 AND profile_uuid = $2`,
+		accountID, profileUUID, sessionToken, identityToken, time.Now(),
+	)
+	return err
+}
