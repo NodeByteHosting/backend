@@ -80,6 +80,8 @@ type CreateGameSessionRequest struct {
 	AccountID string `json:"account_id" example:"550e8400-e29b-41d4-a716-446655440000"`
 	// Profile/character UUID (optional if previously selected)
 	ProfileUUID string `json:"profile_uuid,omitempty" example:"550e8400-e29b-41d4-a716-446655440001"`
+	// Server ID to link this session to (optional)
+	ServerID string `json:"server_id,omitempty" example:"srv_abc123"`
 }
 
 // GameSessionDTO represents a game session

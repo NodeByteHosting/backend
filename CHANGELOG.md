@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - unreleased
+
+### Added
+- **Hytale Token Auto-Push to Pterodactyl** - Automatic environment variable updates for game servers
+  - Game sessions can be linked to specific Pterodactyl servers via `server_id` field
+  - Background worker automatically pushes refreshed tokens to Pterodactyl every 5 minutes
+  - Environment variables `HYTALE_SESSION_TOKEN` and `HYTALE_IDENTITY_TOKEN` updated via Client API
+  - Schema migration `schema_13_hytale_server_link.sql` adds `server_id` column to `hytale_game_sessions`
+  - Graceful degradation: Logs warnings but continues if Pterodactyl push fails
+
+### Fixed
+- **Server-Allocation Relationship Sync** - Fixed missing foreign key population
+  - Added `Relationships` field to `PteroServer` struct to capture included allocations from API
+  - `syncServers()` now properly updates `server_id` foreign key in `allocations` table
+  - Fixes issue where allocations were synced but not linked to their servers
+  - All server-allocation relationships now properly populated during full sync
+
 ## [0.2.1] - 2026-01-14
 
 ### Added

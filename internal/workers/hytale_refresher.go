@@ -191,6 +191,39 @@ func (r *HytaleRefresher) refreshSingleSession(ctx context.Context, session *dat
 		return fmt.Errorf("failed to update session tokens: %w", err)
 	}
 
+	// Push updated tokens to Pterodactyl server if linked
+	if session.ServerID.Valid && session.ServerID.String != "" {
+		envVars := map[string]string{
+			"HYTALE_SESSION_TOKEN":  sessionResp.SessionToken,
+			"HYTALE_IDENTITY_TOKEN": sessionResp.IdentityToken,
+		}
+
+		// Get server UUID from database
+		var serverUUID string
+		err := r.db.Pool.QueryRow(span.Context(),
+			`SELECT uuid FROM servers WHERE id = $1`,
+			session.ServerID.String).Scan(&serverUUID)
+
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("server_id", session.ServerID.String).
+				Msg("Failed to get server UUID for token push")
+		} else {
+			if err := r.pterodactylClient.UpdateServerEnvironment(span.Context(), serverUUID, envVars); err != nil {
+				log.Warn().
+					Err(err).
+					Str("server_uuid", serverUUID).
+					Msg("Failed to push tokens to Pterodactyl server")
+				// Don't fail the refresh - tokens are updated in DB
+			} else {
+				log.Info().
+					Str("server_uuid", serverUUID).
+					Msg("Successfully pushed Hytale tokens to Pterodactyl server")
+			}
+		}
+	}
+
 	log.Info().
 		Str("account_id", session.AccountID).
 		Str("profile_uuid", session.ProfileUUID).

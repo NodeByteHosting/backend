@@ -481,6 +481,11 @@ func (h *HytaleOAuthHandler) CreateGameSession(c *fiber.Ctx) error {
 		IdentityToken: sessionResp.IdentityToken,
 	}
 
+	// Link to server if provided
+	if req.ServerID != "" {
+		gameSession.ServerID = database.NewNullString(req.ServerID)
+	}
+
 	if err := h.oauthRepo.SaveGameSession(c.Context(), gameSession); err != nil {
 		log.Error().Err(err).
 			Str("account_id", req.AccountID).

@@ -211,6 +211,12 @@ type PteroServer struct {
 		CreatedAt string `json:"created_at"`
 		UpdatedAt string `json:"updated_at"`
 	} `json:"attributes"`
+	Relationships struct {
+		Allocations struct {
+			Object string            `json:"object"`
+			Data   []PteroAllocation `json:"data"`
+		} `json:"allocations"`
+	} `json:"relationships"`
 }
 
 // PteroUser represents a Pterodactyl user

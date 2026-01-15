@@ -25,6 +25,7 @@ type HytaleGameSession struct {
 	ID            string
 	AccountID     string
 	ProfileUUID   string
+	ServerID      sql.NullString // Link to Pterodactyl server for token push
 	SessionToken  string
 	IdentityToken string
 	ExpiresAt     time.Time
@@ -131,10 +132,10 @@ func (r *HytaleOAuthRepository) SaveGameSession(ctx context.Context, session *Hy
 	if result.RowsAffected() == 0 {
 		_, err := r.db.Pool.Exec(ctx,
 			`INSERT INTO hytale_game_sessions 
-			(id, account_id, profile_uuid, session_token, identity_token, 
+			(id, account_id, profile_uuid, server_id, session_token, identity_token, 
 			 expires_at, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-			generateUUID(), session.AccountID, session.ProfileUUID,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			generateUUID(), session.AccountID, session.ProfileUUID, session.ServerID,
 			session.SessionToken, session.IdentityToken, session.ExpiresAt, now, now,
 		)
 		return err
@@ -148,13 +149,13 @@ func (r *HytaleOAuthRepository) GetGameSession(ctx context.Context, accountID, p
 	session := &HytaleGameSession{}
 
 	err := r.db.Pool.QueryRow(ctx,
-		`SELECT id, account_id, profile_uuid, session_token, identity_token, 
+		`SELECT id, account_id, profile_uuid, server_id, session_token, identity_token, 
 		 expires_at, created_at, updated_at
 		FROM hytale_game_sessions
 		WHERE account_id = $1 AND profile_uuid = $2`,
 		accountID, profileUUID,
 	).Scan(
-		&session.ID, &session.AccountID, &session.ProfileUUID, &session.SessionToken,
+		&session.ID, &session.AccountID, &session.ProfileUUID, &session.ServerID, &session.SessionToken,
 		&session.IdentityToken, &session.ExpiresAt, &session.CreatedAt, &session.UpdatedAt,
 	)
 
@@ -210,7 +211,7 @@ func (r *HytaleOAuthRepository) GetAllOAuthTokens(ctx context.Context) ([]*Hytal
 // GetAllGameSessions retrieves all active game sessions (for refresh scheduler)
 func (r *HytaleOAuthRepository) GetAllGameSessions(ctx context.Context) ([]*HytaleGameSession, error) {
 	rows, err := r.db.Pool.Query(ctx,
-		`SELECT id, account_id, profile_uuid, session_token, identity_token, 
+		`SELECT id, account_id, profile_uuid, server_id, session_token, identity_token, 
 		 expires_at, created_at, updated_at
 		FROM hytale_game_sessions
 		ORDER BY updated_at ASC`,
@@ -225,7 +226,7 @@ func (r *HytaleOAuthRepository) GetAllGameSessions(ctx context.Context) ([]*Hyta
 	for rows.Next() {
 		session := &HytaleGameSession{}
 		err := rows.Scan(
-			&session.ID, &session.AccountID, &session.ProfileUUID, &session.SessionToken,
+			&session.ID, &session.AccountID, &session.ProfileUUID, &session.ServerID, &session.SessionToken,
 			&session.IdentityToken, &session.ExpiresAt, &session.CreatedAt, &session.UpdatedAt,
 		)
 		if err != nil {

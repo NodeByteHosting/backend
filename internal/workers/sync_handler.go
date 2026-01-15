@@ -727,6 +727,18 @@ func (h *SyncHandler) syncServers(ctx context.Context, syncLogID string) error {
 			log.Warn().Err(err).Int("server_id", server.Attributes.ID).Msg("Failed to upsert server")
 		}
 
+		// Link allocations to this server if included in response
+		if len(server.Relationships.Allocations.Data) > 0 {
+			for _, alloc := range server.Relationships.Allocations.Data {
+				_, err := h.db.Pool.Exec(ctx,
+					`UPDATE allocations SET server_id = (SELECT id FROM servers WHERE "pterodactylId" = $1 LIMIT 1), "updatedAt" = NOW() WHERE id = $2`,
+					server.Attributes.ID, alloc.Attributes.ID)
+				if err != nil {
+					log.Warn().Err(err).Int("allocation_id", alloc.Attributes.ID).Msg("Failed to link allocation to server")
+				}
+			}
+		}
+
 		// Update progress every 25 servers
 		if (i+1)%25 == 0 || i == len(servers)-1 {
 			h.updateDetailedProgress(ctx, syncLogID, "servers", len(servers), i+1, fmt.Sprintf("Processing server %d/%d (%s)", i+1, len(servers), server.Attributes.Name))
