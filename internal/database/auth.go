@@ -35,10 +35,10 @@ func (db *DB) QueryUserByEmail(ctx context.Context, email string) (*User, error)
 
 	err := db.Pool.QueryRow(ctx,
 		`SELECT 
-			id, email, password, username, first_name, last_name, 
-			roles, is_pterodactyl_admin, is_virtfusion_admin, is_system_admin,
-			pterodactyl_id, email_verified, is_active, avatar_url,
-			created_at, updated_at, last_login_at
+			id, email, password, username, "firstName", "lastName", 
+			roles, "isPterodactylAdmin", "isVirtfusionAdmin", "isSystemAdmin",
+			"pterodactylId", "emailVerified", "isActive", "avatarUrl",
+			"createdAt", "updatedAt", "lastLoginAt"
 		FROM users 
 		WHERE email = $1`,
 		email,
@@ -64,10 +64,10 @@ func (db *DB) QueryUserByID(ctx context.Context, id string) (*User, error) {
 
 	err := db.Pool.QueryRow(ctx,
 		`SELECT 
-			id, email, password, username, first_name, last_name, 
-			roles, is_pterodactyl_admin, is_virtfusion_admin, is_system_admin,
-			pterodactyl_id, email_verified, is_active, avatar_url,
-			created_at, updated_at, last_login_at
+			id, email, password, username, "firstName", "lastName", 
+			roles, "isPterodactylAdmin", "isVirtfusionAdmin", "isSystemAdmin",
+			"pterodactylId", "emailVerified", "isActive", "avatarUrl",
+			"createdAt", "updatedAt", "lastLoginAt"
 		FROM users 
 		WHERE id = $1`,
 		id,
@@ -101,11 +101,11 @@ func (db *DB) CreateUser(ctx context.Context, user *User, password string) (*Use
 
 	err = db.Pool.QueryRow(ctx,
 		`INSERT INTO users 
-		(id, email, password, username, first_name, last_name, roles, 
-		is_pterodactyl_admin, is_virtfusion_admin, is_system_admin, 
-		is_active, created_at, updated_at)
+		(id, email, password, username, "firstName", "lastName", roles, 
+		"isPterodactylAdmin", "isVirtfusionAdmin", "isSystemAdmin", 
+		"isActive", "createdAt", "updatedAt")
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		RETURNING id, email, username, first_name, last_name, roles`,
+		RETURNING id, email, username, "firstName", "lastName", roles`,
 		userID, user.Email, string(hashedPassword), user.Username,
 		user.FirstName, user.LastName, user.Roles,
 		user.IsPterodactylAdmin, user.IsVirtfusionAdmin, user.IsSystemAdmin,
@@ -128,13 +128,23 @@ func (db *DB) CreateUser(ctx context.Context, user *User, password string) (*Use
 }
 
 // VerifyPassword checks if the provided password matches the user's hashed password
+// Supports both $2a$ (Go bcrypt) and $2b$ (bcryptjs) hash formats
 func (u *User) VerifyPassword(password string) bool {
 	if !u.Password.Valid {
 		return false
 	}
 
+	hash := u.Password.String
+
+	// bcryptjs uses $2b$ prefix, but Go's bcrypt uses $2a$
+	// They are compatible - we just need to normalize the prefix for Go's library
+	// Replace $2b$ with $2a$ for compatibility
+	if len(hash) > 4 && hash[:4] == "$2b$" {
+		hash = "$2a$" + hash[4:]
+	}
+
 	err := bcrypt.CompareHashAndPassword(
-		[]byte(u.Password.String),
+		[]byte(hash),
 		[]byte(password),
 	)
 
@@ -149,11 +159,11 @@ func (db *DB) StoreVerificationToken(ctx context.Context, userID string, tokenTy
 	expiresAt := time.Now().Add(expiration)
 
 	_, err := db.Pool.Exec(ctx,
-		`INSERT INTO verification_tokens (user_id, token, type, expires_at, created_at)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (user_id, type) DO UPDATE
-		SET token = $2, expires_at = $4, created_at = $5`,
-		userID, hashedToken, tokenType, expiresAt, time.Now(),
+		`INSERT INTO verification_tokens (identifier, token, type, expires)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (identifier, token) DO UPDATE
+		SET expires = $4`,
+		userID, hashedToken, tokenType, expiresAt,
 	)
 
 	if err != nil {
@@ -168,12 +178,12 @@ func (db *DB) VerifyEmailToken(ctx context.Context, userID, token string) (bool,
 	hashedToken := hashToken(token)
 
 	// Check token exists and is not expired
-	var id string
+	var tokenVal string
 	err := db.Pool.QueryRow(ctx,
-		`SELECT id FROM verification_tokens 
-		WHERE user_id = $1 AND token = $2 AND type = $3 AND expires_at > NOW()`,
+		`SELECT token FROM verification_tokens 
+		WHERE identifier = $1 AND token = $2 AND type = $3 AND expires > NOW()`,
 		userID, hashedToken, VerificationTokenType,
-	).Scan(&id)
+	).Scan(&tokenVal)
 
 	if err != nil {
 		return false, err
@@ -182,8 +192,8 @@ func (db *DB) VerifyEmailToken(ctx context.Context, userID, token string) (bool,
 	// Mark email as verified and delete token
 	_, err = db.Pool.Exec(ctx,
 		`BEGIN;
-		UPDATE users SET email_verified = NOW() WHERE id = $1;
-		DELETE FROM verification_tokens WHERE user_id = $1 AND type = $2;
+		UPDATE users SET "emailVerified" = NOW() WHERE id = $1;
+		DELETE FROM verification_tokens WHERE identifier = $1 AND type = $2;
 		COMMIT;`,
 		userID, VerificationTokenType,
 	)
@@ -199,12 +209,12 @@ func (db *DB) VerifyEmailToken(ctx context.Context, userID, token string) (bool,
 func (db *DB) GetPasswordResetToken(ctx context.Context, userID, token string) (bool, error) {
 	hashedToken := hashToken(token)
 
-	var id string
+	var tokenVal string
 	err := db.Pool.QueryRow(ctx,
-		`SELECT id FROM verification_tokens 
-		WHERE user_id = $1 AND token = $2 AND type = $3 AND expires_at > NOW()`,
+		`SELECT token FROM verification_tokens 
+		WHERE identifier = $1 AND token = $2 AND type = $3 AND expires > NOW()`,
 		userID, hashedToken, PasswordResetTokenType,
-	).Scan(&id)
+	).Scan(&tokenVal)
 
 	if err != nil {
 		return false, err
@@ -230,8 +240,8 @@ func (db *DB) ResetUserPassword(ctx context.Context, userID, token, newPassword 
 	// Update password and delete token in transaction
 	_, err = db.Pool.Exec(ctx,
 		`BEGIN;
-		UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2;
-		DELETE FROM verification_tokens WHERE user_id = $2 AND type = $3;
+		UPDATE users SET password = $1, "updatedAt" = NOW() WHERE id = $2;
+		DELETE FROM verification_tokens WHERE identifier = $2 AND type = $3;
 		COMMIT;`,
 		string(hashedPassword), userID, PasswordResetTokenType,
 	)
@@ -249,11 +259,11 @@ func (db *DB) GetMagicLinkToken(ctx context.Context, token string) (*Verificatio
 
 	vt := &VerificationToken{}
 	err := db.Pool.QueryRow(ctx,
-		`SELECT user_id, token, type, expires_at, created_at 
+		`SELECT identifier, token, type, expires 
 		FROM verification_tokens 
-		WHERE token = $1 AND type = $2 AND expires_at > NOW()`,
+		WHERE token = $1 AND type = $2 AND expires > NOW()`,
 		hashedToken, MagicLinkTokenType,
-	).Scan(&vt.UserID, &vt.Token, &vt.Type, &vt.ExpiresAt, &vt.CreatedAt)
+	).Scan(&vt.UserID, &vt.Token, &vt.Type, &vt.ExpiresAt)
 
 	if err != nil {
 		return nil, err
@@ -269,8 +279,8 @@ func (db *DB) ConsumeMagicLinkToken(ctx context.Context, token string) (string, 
 	var userID string
 	err := db.Pool.QueryRow(ctx,
 		`DELETE FROM verification_tokens 
-		WHERE token = $1 AND type = $2 AND expires_at > NOW()
-		RETURNING user_id`,
+		WHERE token = $1 AND type = $2 AND expires > NOW()
+		RETURNING identifier`,
 		hashedToken, MagicLinkTokenType,
 	).Scan(&userID)
 
@@ -284,7 +294,7 @@ func (db *DB) ConsumeMagicLinkToken(ctx context.Context, token string) (string, 
 // UpdateLastLogin updates the user's last login timestamp
 func (db *DB) UpdateLastLogin(ctx context.Context, userID string) error {
 	_, err := db.Pool.Exec(ctx,
-		`UPDATE users SET last_login_at = NOW() WHERE id = $1`,
+		`UPDATE users SET "lastLoginAt" = NOW() WHERE id = $1`,
 		userID,
 	)
 	return err

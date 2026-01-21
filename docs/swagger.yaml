@@ -1,5 +1,56 @@
 basePath: /
 definitions:
+  auth.TokenPair:
+    properties:
+      accessToken:
+        type: string
+      expiresIn:
+        description: seconds until access token expires
+        type: integer
+      refreshToken:
+        type: string
+      tokenType:
+        type: string
+    type: object
+  handlers.AuthResponse:
+    properties:
+      accessToken:
+        description: For backward compatibility
+        type: string
+      error:
+        type: string
+      expiresIn:
+        description: For backward compatibility
+        type: integer
+      message:
+        type: string
+      refreshToken:
+        description: For backward compatibility
+        type: string
+      success:
+        type: boolean
+      token:
+        description: 'Deprecated: use tokens instead'
+        type: string
+      tokens:
+        $ref: '#/definitions/auth.TokenPair'
+      user:
+        $ref: '#/definitions/handlers.UserData'
+    type: object
+  handlers.CredentialsRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  handlers.CredentialsValidateRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
   handlers.DispatchWebhookRequest:
     properties:
       data:
@@ -17,6 +68,26 @@ definitions:
       success:
         type: boolean
     type: object
+  handlers.ForgotPasswordRequest:
+    properties:
+      email:
+        type: string
+    type: object
+  handlers.LogoutRequest:
+    properties:
+      refreshToken:
+        type: string
+    type: object
+  handlers.MagicLinkRequest:
+    properties:
+      email:
+        type: string
+    type: object
+  handlers.MagicLinkVerifyRequest:
+    properties:
+      token:
+        type: string
+    type: object
   handlers.QueueEmailRequest:
     properties:
       data:
@@ -28,6 +99,37 @@ definitions:
       template:
         type: string
       to:
+        type: string
+    type: object
+  handlers.RefreshTokenRequest:
+    properties:
+      refreshToken:
+        type: string
+    type: object
+  handlers.RegisterUserRequest:
+    properties:
+      confirmPassword:
+        type: string
+      email:
+        type: string
+      firstName:
+        type: string
+      lastName:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.ResetPasswordRequest:
+    properties:
+      confirmPassword:
+        type: string
+      id:
+        type: string
+      password:
+        type: string
+      token:
         type: string
     type: object
   handlers.SuccessResponse:
@@ -118,6 +220,33 @@ definitions:
       autoSyncInterval:
         type: integer
     type: object
+  handlers.UserData:
+    properties:
+      email:
+        type: string
+      emailVerified:
+        type: string
+      firstName:
+        type: string
+      id:
+        type: string
+      isPterodactylAdmin:
+        type: boolean
+      isSystemAdmin:
+        type: boolean
+      isVirtfusionAdmin:
+        type: boolean
+      lastName:
+        type: string
+      pterodactylId:
+        type: integer
+      roles:
+        items:
+          type: string
+        type: array
+      username:
+        type: string
+    type: object
   types.CreateGameSessionRequest:
     properties:
       account_id:
@@ -127,6 +256,10 @@ definitions:
       profile_uuid:
         description: Profile/character UUID (optional if previously selected)
         example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+      server_id:
+        description: Server ID to link this session to (optional)
+        example: srv_abc123
         type: string
     type: object
   types.CreateGameSessionResponseDTO:
@@ -1083,6 +1216,417 @@ paths:
       summary: Get public statistics
       tags:
       - Public
+  /api/v1/auth/check-email:
+    get:
+      consumes:
+      - application/json
+      description: Checks if an email address is already registered in the system
+      parameters:
+      - description: Email address to check
+        in: query
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email availability status
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid email
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Check Email Exists
+      tags:
+      - Authentication
+  /api/v1/auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Sends password reset email with reset token
+      parameters:
+      - description: User email
+        in: body
+        name: email
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reset email sent
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid email
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Forgot Password
+      tags:
+      - Authentication
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with email and password, returns JWT tokens
+      parameters:
+      - description: Login credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CredentialsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful with JWT tokens
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "401":
+          description: Invalid credentials or email not verified
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: User Login
+      tags:
+      - Authentication
+  /api/v1/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Invalidates refresh token and terminates user session
+      parameters:
+      - description: Optional refresh token to invalidate
+        in: body
+        name: logout
+        schema:
+          $ref: '#/definitions/handlers.LogoutRequest'
+      - description: Bearer token
+        example: Bearer eyJhbGc...
+        in: header
+        name: Authorization
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logged out successfully
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: User Logout
+      tags:
+      - Authentication
+  /api/v1/auth/magic-link:
+    post:
+      consumes:
+      - application/json
+      description: Sends a passwordless authentication magic link to user's email
+      parameters:
+      - description: User email
+        in: body
+        name: magicLink
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.MagicLinkRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Magic link sent
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid email
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Request Magic Link
+      tags:
+      - Authentication
+  /api/v1/auth/magic-link/verify:
+    post:
+      consumes:
+      - application/json
+      description: Verifies magic link token and authenticates user
+      parameters:
+      - description: Magic link token
+        in: body
+        name: verify
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.MagicLinkVerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Authentication successful with JWT tokens
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "401":
+          description: Invalid or expired token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Verify Magic Link
+      tags:
+      - Authentication
+  /api/v1/auth/me:
+    get:
+      consumes:
+      - application/json
+      description: Returns authenticated user information from JWT token
+      parameters:
+      - description: Bearer token
+        example: Bearer eyJhbGc...
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User data
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Get Current User
+      tags:
+      - Authentication
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchanges a valid refresh token for new access and refresh tokens
+      parameters:
+      - description: Refresh token
+        in: body
+        name: refresh
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: New tokens generated
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Missing refresh token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "401":
+          description: Invalid or expired refresh token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Refresh Access Token
+      tags:
+      - Authentication
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Registers a new user account and sends verification email
+      parameters:
+      - description: Registration details
+        in: body
+        name: registration
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User registered successfully
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid request or validation error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "409":
+          description: Email already exists
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: User Registration
+      tags:
+      - Authentication
+  /api/v1/auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Resets user password using reset token from email
+      parameters:
+      - description: Reset token and new password
+        in: body
+        name: reset
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset successfully
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid request or weak password
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "404":
+          description: User not found or invalid token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Reset Password
+      tags:
+      - Authentication
+  /api/v1/auth/users/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves user information by user ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User information
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Get User By ID
+      tags:
+      - Authentication
+  /api/v1/auth/validate:
+    post:
+      consumes:
+      - application/json
+      description: Validates user credentials without creating a session
+      parameters:
+      - description: Credentials to validate
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CredentialsValidateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Credentials are valid
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Invalid credentials
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Validate Credentials
+      tags:
+      - Authentication
+  /api/v1/auth/verify-email:
+    post:
+      consumes:
+      - application/json
+      description: Verifies user email address with verification token
+      parameters:
+      - description: Verification token
+        in: body
+        name: verification
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email verified successfully
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid or missing token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Verify Email
+      tags:
+      - Authentication
   /api/v1/email/queue:
     post:
       consumes:

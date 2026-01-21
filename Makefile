@@ -1,6 +1,12 @@
 # NodeByte Backend Makefile
 # Usage: make [target]
 
+# Load environment variables from .env file
+ifneq (,$(wildcard .env))
+    include .env
+    export $(shell sed 's/=.*//' .env)
+endif
+
 # Variables
 BINARY_NAME=nodebyte-backend
 MAIN_PATH=./cmd/api
@@ -18,7 +24,7 @@ YELLOW=
 RED=
 NC=
 
-.PHONY: all build run dev clean test lint fmt vet deps tidy docker-build docker-up docker-down docker-logs swagger help
+.PHONY: all build build-tools run dev clean test lint fmt vet deps tidy docker-build docker-up docker-down docker-logs swagger help db-init db-migrate db-reset db-list
 
 # Default target
 all: build
@@ -41,6 +47,13 @@ build-all:
 	GOOS=darwin GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(MAIN_PATH)
 	GOOS=darwin GOARCH=arm64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(MAIN_PATH)
 	@echo "All builds complete"
+
+# Build database tools
+build-tools:
+	@echo "Building database tools..."
+	@if not exist "$(BUILD_DIR)" mkdir "$(BUILD_DIR)"
+	$(GO) build $(GOFLAGS) -o $(BUILD_DIR)/db ./cmd/db
+	@echo "Database tools built: $(BUILD_DIR)/db"
 
 ## Run Commands
 
@@ -169,6 +182,37 @@ docker-clean:
 
 ## Database Commands
 
+# Build database migration tools
+build-db-tools: build-tools
+
+# Initialize fresh database with all schemas
+db-init: build-tools
+	@echo "Initializing database..."
+	$(BUILD_DIR)/db init -database "$(DATABASE_URL)"
+
+# Run interactive migration
+db-migrate: build-tools
+	@echo "Running database migration..."
+	$(BUILD_DIR)/db migrate -database "$(DATABASE_URL)"
+
+# Migrate specific schema
+db-migrate-schema: build-tools
+	@if "$(SCHEMA)"=="" (
+		@echo "Usage: make db-migrate-schema SCHEMA=schema_name.sql"
+		@exit /b 1
+	)
+	@echo "Migrating $(SCHEMA)..."
+	$(BUILD_DIR)/db migrate -database "$(DATABASE_URL)" -schema "$(SCHEMA)"
+
+# Reset database (DROP and recreate) - CAREFUL!
+db-reset: build-tools
+	@echo "WARNING: This will DROP and recreate the database!"
+	$(BUILD_DIR)/db reset -database "$(DATABASE_URL)"
+
+# List available schemas
+db-list: build-tools
+	$(BUILD_DIR)/db list
+
 # Generate sqlc code (if using sqlc)
 sqlc:
 	@echo "Generating sqlc code..."
@@ -207,6 +251,7 @@ help:
 	@echo "Build:"
 	@echo "  make build          - Build the application"
 	@echo "  make build-all      - Build for all platforms"
+	@echo "  make build-tools    - Build database tools"
 	@echo ""
 	@echo "Run:"
 	@echo "  make run            - Build and run"
@@ -221,6 +266,13 @@ help:
 	@echo "  make fmt            - Format code"
 	@echo "  make vet            - Run go vet"
 	@echo "  make check          - Run all checks"
+	@echo ""
+	@echo "Database:"
+	@echo "  make db-init        - Initialize fresh database"
+	@echo "  make db-migrate     - Run interactive migration"
+	@echo "  make db-migrate-schema SCHEMA=schema_name.sql - Migrate specific schema"
+	@echo "  make db-reset       - Reset database (DROP and recreate)"
+	@echo "  make db-list        - List available schemas"
 	@echo ""
 	@echo "Dependencies:"
 	@echo "  make deps           - Download dependencies"

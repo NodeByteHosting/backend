@@ -346,7 +346,7 @@ func (h *SyncHandler) HandleCleanupLogs(ctx context.Context, task *asynq.Task) e
 
 	cutoff := time.Now().AddDate(0, 0, -days)
 
-	query := `DELETE FROM sync_logs WHERE created_at < $1`
+	query := `DELETE FROM sync_logs WHERE "startedAt" < $1`
 	result, err := h.db.Pool.Exec(ctx, query, cutoff)
 	if err != nil {
 		return fmt.Errorf("failed to cleanup logs: %w", err)

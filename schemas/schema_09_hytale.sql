@@ -2,34 +2,34 @@
 -- Stores OAuth tokens obtained from Hytale OAuth provider
 CREATE TABLE IF NOT EXISTS hytale_oauth_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    account_id UUID NOT NULL UNIQUE,
-    access_token TEXT NOT NULL,
-    refresh_token TEXT NOT NULL,
-    access_token_expiry TIMESTAMP NOT NULL,
-    profile_uuid UUID,
+    "accountId" UUID NOT NULL UNIQUE,
+    "accessToken" TEXT NOT NULL,
+    "refreshToken" TEXT NOT NULL,
+    "accessTokenExpiry" TIMESTAMP NOT NULL,
+    "profileUuid" UUID,
     scope TEXT NOT NULL DEFAULT 'openid offline auth:server',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_refreshed_at TIMESTAMP,
-    CONSTRAINT hytale_oauth_tokens_account_id_key UNIQUE (account_id)
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastRefreshedAt" TIMESTAMP,
+    CONSTRAINT hytale_oauth_tokens_account_id_key UNIQUE ("accountId")
 );
 
-CREATE INDEX IF NOT EXISTS idx_hytale_oauth_tokens_account_id ON hytale_oauth_tokens(account_id);
-CREATE INDEX IF NOT EXISTS idx_hytale_oauth_tokens_access_token_expiry ON hytale_oauth_tokens(access_token_expiry);
+CREATE INDEX IF NOT EXISTS idx_hytale_oauth_tokens_account_id ON hytale_oauth_tokens("accountId");
+CREATE INDEX IF NOT EXISTS idx_hytale_oauth_tokens_access_token_expiry ON hytale_oauth_tokens("accessTokenExpiry");
 
 -- Hytale Game Sessions
 -- Stores active game sessions for Hytale servers
 CREATE TABLE IF NOT EXISTS hytale_game_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    account_id UUID NOT NULL,
-    profile_uuid UUID NOT NULL,
-    session_token TEXT NOT NULL,
-    identity_token TEXT NOT NULL,
-    expires_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT hytale_game_sessions_account_profile_key UNIQUE (account_id, profile_uuid)
+    "accountId" UUID NOT NULL,
+    "profileUuid" UUID NOT NULL,
+    "sessionToken" TEXT NOT NULL,
+    "identityToken" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT hytale_game_sessions_account_profile_key UNIQUE ("accountId", "profileUuid")
 );
 
-CREATE INDEX IF NOT EXISTS idx_hytale_game_sessions_account_id ON hytale_game_sessions(account_id);
-CREATE INDEX IF NOT EXISTS idx_hytale_game_sessions_expires_at ON hytale_game_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_hytale_game_sessions_account_id ON hytale_game_sessions("accountId");
+CREATE INDEX IF NOT EXISTS idx_hytale_game_sessions_expires_at ON hytale_game_sessions("expiresAt");

@@ -10,6 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.2] - unreleased
 
 ### Added
+- **Unified Database CLI Tool** - Consolidated shell scripts into cross-platform Go CLI
+  - Supports Windows, macOS, and Linux without native shell dependencies
+  - `db init` - Initialize database schema with interactive schema selection
+  - `db migrate` - Run specific schema migrations with validation
+  - `db reset` - Complete database reset with confirmation prompt
+  - `db list` - Display all available schema files with status
+  - Makefile integration with environment variable loading from `.env`
+- **Consolidated Next.js API Routes to Go Backend** - Complete migration of frontend API routes to backend
+  - Moved all `/api/admin/` endpoints from Next.js to Go Fiber backend
+  - Admin user management: `GET/POST /api/admin/users`, `POST /api/admin/users/roles`
+  - Admin settings: `GET/POST /api/admin/settings`, `POST /api/admin/settings/test`
+  - GitHub repositories: `GET/POST/PUT/DELETE /api/admin/settings/repos`
+  - Discord webhooks: `GET/POST/PUT/PATCH/DELETE /api/admin/settings/webhooks`
+  - Admin sync controls: `GET/POST /api/admin/sync`, `GET /api/admin/sync/logs`, `GET/POST /api/admin/sync/settings`
+  - Admin servers: `GET /api/admin/servers`
+  - Bearer token authentication middleware for all admin routes
+  - Consistent error response format across all endpoints
+- **Admin User Management API** - Complete user listing and management endpoints
+  - `GET /api/admin/users` - Paginated user listing with filtering, sorting, search
+  - Query parameters: page, pageSize, sortField, sortOrder, filter, search
+  - Returns paginated response with user data and statistics
+  - `POST /api/admin/users/roles` - Update user role assignments
+  - User statistics: totalUsers, migratedUsers, adminCount, activeCount
 - **Hytale Token Auto-Push to Pterodactyl** - Automatic environment variable updates for game servers
   - Game sessions can be linked to specific Pterodactyl servers via `server_id` field
   - Background worker automatically pushes refreshed tokens to Pterodactyl every 5 minutes
@@ -18,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Graceful degradation: Logs warnings but continues if Pterodactyl push fails
 
 ### Fixed
+- **Admin Users Data Type Handling** - Fixed TIMESTAMP column scanning from PostgreSQL
+  - Changed timestamp handling to use `time.Time` objects with RFC3339 formatting
+  - Properly convert database TIMESTAMP columns to ISO 8601 string format in API responses
+  - Fixed empty users array issue in admin panel users listing
+  - Proper null pointer handling for nullable timestamp fields (`lastLoginAt`, `emailVerifiedTime`)
 - **Server-Allocation Relationship Sync** - Fixed missing foreign key population
   - Added `Relationships` field to `PteroServer` struct to capture included allocations from API
   - `syncServers()` now properly updates `server_id` foreign key in `allocations` table

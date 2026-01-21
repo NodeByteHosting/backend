@@ -707,6 +707,142 @@ docker-compose logs -f backend
 - Tests for business logic and API handlers
 - Code must pass: `gofmt`, `go vet`, `golangci-lint`
 
+# Database Tools - Quick Reference
+
+## One-Time Setup
+
+```bash
+cd backend
+make build-tools
+```
+
+## Common Commands
+
+### Fresh Database
+```bash
+make db-init
+```
+
+### Add New Schemas (Interactive)
+```bash
+make db-migrate
+# Then select schema numbers from menu (e.g., 14,15)
+```
+
+### Single Schema
+```bash
+make db-migrate-schema SCHEMA=schema_15_careers.sql
+```
+
+### Start Fresh
+```bash
+make db-reset
+# Confirm by typing database name
+```
+
+### See Available Schemas
+```bash
+make db-list
+```
+
+## With Environment Variable
+
+```bash
+export DATABASE_URL="postgresql://user:password@localhost:5432/nodebyte"
+
+# Then use commands normally
+make db-init
+make db-migrate
+make db-reset
+```
+
+## Direct Binary Usage
+
+```bash
+# All commands also work with the binary directly
+./bin/db init -database "postgresql://user:password@localhost:5432/nodebyte"
+./bin/db migrate -database "postgresql://user:password@localhost:5432/nodebyte"
+./bin/db migrate -database "..." -schema schema_15_careers.sql
+./bin/db reset -database "postgresql://user:password@localhost:5432/nodebyte"
+./bin/db list
+./bin/db help
+```
+
+## Development Workflow
+
+```bash
+# Start fresh
+make db-reset
+# Confirm: nodebyte
+# ✅ Database is now reset and initialized
+
+# Make changes, run tests
+# ...
+
+# Add new schema during development
+make db-migrate-schema SCHEMA=schema_16_new_feature.sql
+
+# Or choose from menu
+make db-migrate
+```
+
+## Makefile Targets
+
+```
+db-init               # Initialize fresh database
+db-migrate            # Interactive schema selection
+db-migrate-schema     # Migrate specific schema (SCHEMA=name)
+db-reset              # Drop and recreate database
+db-list               # List available schemas
+build-tools           # Build database tool
+```
+
+## Common Issues
+
+**Tool not found?**
+```bash
+make build-tools
+```
+
+**Wrong database connected?**
+```bash
+export DATABASE_URL="postgresql://user:password@correct-host/correct-db"
+make db-migrate
+```
+
+**Need to start over?**
+```bash
+make db-reset
+# Type database name to confirm
+# Database is now fresh with all 15 schemas
+```
+
+## Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | (none) |
+| `SCHEMA` | Used with `db-migrate-schema` | (none) |
+
+## More Information
+
+- **Full Guide**: See `DATABASE_TOOLS.md`
+- **Implementation**: See `DATABASE_IMPLEMENTATION.md`
+- **Schema Details**: See `schemas/README.md`
+
+---
+
+**Quick Test:**
+```bash
+make build-tools && make db-list
+```
+
+**Help:**
+```bash
+make help
+./bin/db help
+```
+
 ### Pre-Commit Checks
 
 Before pushing, ensure code passes all checks:
