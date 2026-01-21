@@ -37,6 +37,13 @@ definitions:
       user:
         $ref: '#/definitions/handlers.UserData'
     type: object
+  handlers.ChangePasswordRequest:
+    properties:
+      currentPassword:
+        type: string
+      newPassword:
+        type: string
+    type: object
   handlers.CredentialsRequest:
     properties:
       email:
@@ -219,6 +226,17 @@ definitions:
         type: boolean
       autoSyncInterval:
         type: integer
+    type: object
+  handlers.UpdateUserAccountRequest:
+    properties:
+      email:
+        type: string
+      firstName:
+        type: string
+      lastName:
+        type: string
+      username:
+        type: string
     type: object
   handlers.UserData:
     properties:
@@ -1627,6 +1645,173 @@ paths:
       summary: Verify Email
       tags:
       - Authentication
+  /api/v1/dashboard/account:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves account information for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Account info retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user account
+      tags:
+      - Dashboard
+    put:
+      consumes:
+      - application/json
+      description: Updates account information for the authenticated user
+      parameters:
+      - description: Account update data
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateUserAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Account updated
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user account
+      tags:
+      - Dashboard
+  /api/v1/dashboard/account/password:
+    put:
+      consumes:
+      - application/json
+      description: Changes password for the authenticated user
+      parameters:
+      - description: Password change data
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password changed
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized or wrong password
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change user password
+      tags:
+      - Dashboard
+  /api/v1/dashboard/servers:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves paginated list of servers owned by the authenticated
+        user with search and filtering
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 12
+        description: Items per page
+        in: query
+        name: per_page
+        type: integer
+      - description: Search query
+        in: query
+        name: search
+        type: string
+      - description: Status filter
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Servers retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user servers
+      tags:
+      - Dashboard
+  /api/v1/dashboard/stats:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves statistics for the user's dashboard including server
+        counts and recent servers
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Dashboard stats retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get dashboard stats
+      tags:
+      - Dashboard
   /api/v1/email/queue:
     post:
       consumes:
