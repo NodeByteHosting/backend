@@ -91,6 +91,12 @@ func runServer() error {
 
 	// Initialize Redis and queue
 	_, queueMgr := initQueue(cfg)
+	// ensure the underlying Asynq client is closed when runServer exits
+	defer func() {
+		if err := queueMgr.Close(); err != nil {
+			log.Error().Err(err).Msg("error closing queue manager client")
+		}
+	}()
 
 	// Initialize Sentry
 	sentryHandler := initSentry(cfg)
@@ -196,8 +202,8 @@ func startServer(cfg *config.Config, db *database.DB, queueMgr *queue.Manager, s
 	go startWorkerServer(workerServer)
 	go startScheduler(scheduler)
 
-	// Setup graceful shutdown
-	setupGracefulShutdown(app, scheduler, workerServer)
+	// Setup graceful shutdown (including queue client cleanup)
+	setupGracefulShutdown(app, scheduler, workerServer, queueMgr)
 
 	// Start server
 	port := getPort(cfg)
@@ -237,7 +243,7 @@ func startScheduler(scheduler *workers.Scheduler) {
 }
 
 // setupGracefulShutdown configures graceful server shutdown.
-func setupGracefulShutdown(app *fiber.App, scheduler *workers.Scheduler, workerServer *workers.Server) {
+func setupGracefulShutdown(app *fiber.App, scheduler *workers.Scheduler, workerServer *workers.Server, queueMgr *queue.Manager) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -249,6 +255,12 @@ func setupGracefulShutdown(app *fiber.App, scheduler *workers.Scheduler, workerS
 
 		scheduler.Stop()
 		workerServer.Stop()
+		// make sure we close the queue client so Redis connections are released
+		if queueMgr != nil {
+			if err := queueMgr.Close(); err != nil {
+				log.Error().Err(err).Msg("error closing queue manager client during shutdown")
+			}
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
