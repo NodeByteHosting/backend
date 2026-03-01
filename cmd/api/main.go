@@ -20,11 +20,8 @@ package main
 
 import (
 	"context"
-	"net/url"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -36,8 +33,10 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 
 	_ "github.com/nodebyte/backend/docs"
+	"github.com/nodebyte/backend/internal/cli/api"
 	"github.com/nodebyte/backend/internal/config"
 	"github.com/nodebyte/backend/internal/crypto"
 	"github.com/nodebyte/backend/internal/database"
@@ -48,61 +47,106 @@ import (
 )
 
 func main() {
-	// Load .env file from current directory
-	if err := godotenv.Load(".env"); err != nil {
-		log.Warn().Err(err).Msg(".env file not found, using environment variables")
+	rootCmd := &cobra.Command{
+		Use:   "api",
+		Short: "NodeByte Backend API Server",
+		Long:  "Start the NodeByte backend API server with worker and scheduler services.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runServer()
+		},
 	}
 
-	// Configure zerolog
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	if os.Getenv("ENV") == "development" {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
 	}
+}
 
-	// Load configuration
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to load configuration")
-	}
+// runServer initializes and starts the API server.
+func runServer() error {
+	// Initialize logging and configuration
+	initLogging()
+	cfg := loadConfig()
 
 	log.Info().Str("env", cfg.Env).Msg("Starting NodeByte Backend Service")
 
-	// Initialize database connection
-	db, err := database.NewConnection(cfg.DatabaseURL)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect to database")
-	}
+	// Initialize database
+	db := connectDatabase(cfg)
 	defer db.Close()
 
-	log.Info().Msg("Connected to PostgreSQL database")
+	// Initialize encryption
+	encryptor := initEncryption()
 
-	// Create encryptor if encryption key is configured
-	var encryptor *crypto.Encryptor
-	encryptor, err = crypto.NewEncryptorFromEnv()
-	if err != nil {
-		log.Warn().Err(err).Msg("Encryption not configured; sensitive values stored unencrypted")
-	}
-
-	// Load system settings from database to override/populate config
+	// Load database settings
 	if err := cfg.MergeFromDB(db, encryptor); err != nil {
 		log.Warn().Err(err).Msg("Failed to load settings from database; using env values only")
 	} else {
 		log.Info().Msg("Loaded system settings from database")
 	}
 
-	// Debug: Log configuration state
 	log.Debug().
 		Str("pterodactyl_url", cfg.PterodactylURL).
 		Int("pterodactyl_api_key_len", len(cfg.PterodactylAPIKey)).
 		Int("pterodactyl_client_api_key_len", len(cfg.PterodactylClientAPIKey)).
 		Msg("Configuration initialized")
 
-	// Parse Redis URL and create Asynq client
-	// REDIS_URL format: redis://user:pass@host:port/db or host:port
-	redisOpt, err := parseRedisURL(cfg.RedisURL)
+	// Initialize Redis and queue
+	_, queueMgr := initQueue(cfg)
+
+	// Initialize Sentry
+	sentryHandler := initSentry(cfg)
+
+	// Setup and start HTTP server
+	return startServer(cfg, db, queueMgr, sentryHandler)
+}
+
+// initLogging configures the logging system.
+func initLogging() {
+	if err := godotenv.Load(".env"); err != nil {
+		log.Warn().Err(err).Msg(".env file not found, using environment variables")
+	}
+
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	if os.Getenv("ENV") == "development" {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	}
+}
+
+// loadConfig loads and returns the application configuration.
+func loadConfig() *config.Config {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to load configuration")
+	}
+	return cfg
+}
+
+// connectDatabase establishes a database connection.
+func connectDatabase(cfg *config.Config) *database.DB {
+	db, err := database.NewConnection(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to connect to database")
+	}
+	log.Info().Msg("Connected to PostgreSQL database")
+	return db
+}
+
+// initEncryption initializes the encryption system.
+func initEncryption() *crypto.Encryptor {
+	encryptor, err := crypto.NewEncryptorFromEnv()
+	if err != nil {
+		log.Warn().Err(err).Msg("Encryption not configured; sensitive values stored unencrypted")
+	}
+	return encryptor
+}
+
+// initQueue initializes Redis configuration.
+func initQueue(cfg *config.Config) (asynq.RedisClientOpt, *queue.Manager) {
+	redisConfig, err := api.ParseRedisURL(cfg.RedisURL)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to parse Redis URL")
 	}
+
+	redisOpt := redisConfig.ToAsynqOpt()
 
 	log.Info().
 		Str("redis_addr", redisOpt.Addr).
@@ -110,20 +154,24 @@ func main() {
 		Bool("redis_has_password", redisOpt.Password != "").
 		Msg("Redis connection configured")
 
-	// Initialize Asynq client (for enqueuing tasks)
+	// Create a client for the queue manager
 	asynqClient := asynq.NewClient(redisOpt)
-	defer asynqClient.Close()
+	log.Info().Msg("Connected to Redis")
 
-	// Initialize queue manager
-	queueManager := queue.NewManager(asynqClient)
+	return redisOpt, queue.NewManager(asynqClient)
+}
 
-	log.Info().Str("redis", cfg.RedisURL).Msg("Connected to Redis")
-
+// initSentry initializes the Sentry error tracking system.
+func initSentry(cfg *config.Config) fiber.Handler {
 	sentryHandler, err := sentry.InitSentry(cfg.SentryDSN, cfg.Env, "0.2.1")
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize Sentry")
 	}
+	return sentryHandler
+}
 
+// startServer initializes and starts the HTTP server.
+func startServer(cfg *config.Config, db *database.DB, queueMgr *queue.Manager, sentryHandler fiber.Handler) error {
 	app := fiber.New(fiber.Config{
 		AppName:      "NodeByte Backend v1.0.0",
 		ReadTimeout:  30 * time.Second,
@@ -131,7 +179,34 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	})
 
-	// Middleware
+	// Setup middleware
+	setupMiddleware(app, sentryHandler, cfg)
+
+	// Setup routes
+	apiKeyMiddleware := handlers.NewAPIKeyMiddleware(cfg.APIKey)
+	handlers.SetupRoutes(app, db, queueMgr, apiKeyMiddleware, cfg)
+
+	// Start background services
+	redisConfig, _ := api.ParseRedisURL(cfg.RedisURL)
+	redisOpt := redisConfig.ToAsynqOpt()
+
+	workerServer := workers.NewServer(redisOpt, db, cfg)
+	scheduler := workers.NewScheduler(db, redisOpt, cfg)
+
+	go startWorkerServer(workerServer)
+	go startScheduler(scheduler)
+
+	// Setup graceful shutdown
+	setupGracefulShutdown(app, scheduler, workerServer)
+
+	// Start server
+	port := getPort(cfg)
+	log.Info().Str("port", port).Msg("Starting HTTP server")
+	return app.Listen(":" + port)
+}
+
+// setupMiddleware configures HTTP middleware.
+func setupMiddleware(app *fiber.App, sentryHandler fiber.Handler, cfg *config.Config) {
 	app.Use(recover.New())
 	if sentryHandler != nil {
 		app.Use(sentryHandler)
@@ -145,29 +220,24 @@ func main() {
 		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS, PATCH",
 		AllowCredentials: true,
 	}))
+}
 
-	// API key middleware for protected routes
-	apiKeyMiddleware := handlers.NewAPIKeyMiddleware(cfg.APIKey)
+// startWorkerServer starts the Asynq worker server.
+func startWorkerServer(workerServer *workers.Server) {
+	if err := workerServer.Start(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to start worker server")
+	}
+}
 
-	// Setup routes
-	handlers.SetupRoutes(app, db, queueManager, apiKeyMiddleware, cfg)
+// startScheduler starts the task scheduler.
+func startScheduler(scheduler *workers.Scheduler) {
+	if err := scheduler.Start(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to start scheduler")
+	}
+}
 
-	// Start Asynq worker server in a goroutine
-	workerServer := workers.NewServer(redisOpt, db, cfg)
-	go func() {
-		if err := workerServer.Start(); err != nil {
-			log.Fatal().Err(err).Msg("Failed to start worker server")
-		}
-	}()
-
-	// Start scheduler for cron jobs
-	scheduler := workers.NewScheduler(db, redisOpt, cfg)
-	go func() {
-		if err := scheduler.Start(); err != nil {
-			log.Fatal().Err(err).Msg("Failed to start scheduler")
-		}
-	}()
-
+// setupGracefulShutdown configures graceful server shutdown.
+func setupGracefulShutdown(app *fiber.App, scheduler *workers.Scheduler, workerServer *workers.Server) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -177,7 +247,6 @@ func main() {
 
 		sentry.Flush(5 * time.Second)
 
-		// Stop scheduler
 		scheduler.Stop()
 		workerServer.Stop()
 
@@ -188,63 +257,12 @@ func main() {
 			log.Error().Err(err).Msg("Server forced to shutdown")
 		}
 	}()
-
-	port := cfg.Port
-	if port == "" {
-		port = "8080"
-	}
-
-	log.Info().Str("port", port).Msg("Starting HTTP server")
-	if err := app.Listen(":" + port); err != nil {
-		log.Fatal().Err(err).Msg("Failed to start server")
-	}
 }
 
-// parseRedisURL parses a Redis connection string (redis://user:pass@host:port/db)
-// and returns an Asynq RedisClientOpt
-func parseRedisURL(redisURL string) (asynq.RedisClientOpt, error) {
-	// Handle simple host:port format
-	if !strings.Contains(redisURL, "://") {
-		parts := strings.Split(redisURL, ":")
-		if len(parts) == 2 {
-			return asynq.RedisClientOpt{Addr: redisURL}, nil
-		}
+// getPort returns the server port from config or defaults to 8080.
+func getPort(cfg *config.Config) string {
+	if cfg.Port != "" {
+		return cfg.Port
 	}
-
-	// Parse full redis:// URL
-	u, err := url.Parse(redisURL)
-	if err != nil {
-		return asynq.RedisClientOpt{}, err
-	}
-
-	// Get host and port
-	host := u.Hostname()
-	port := u.Port()
-	if port == "" {
-		port = "6379"
-	}
-	addr := host + ":" + port
-
-	// Get credentials
-	var password string
-	if u.User != nil {
-		password, _ = u.User.Password()
-	}
-
-	// Get database number
-	db := 0
-	if u.Path != "" {
-		path := strings.TrimPrefix(u.Path, "/")
-		if path != "" {
-			if dbNum, err := strconv.Atoi(path); err == nil {
-				db = dbNum
-			}
-		}
-	}
-
-	return asynq.RedisClientOpt{
-		Addr:     addr,
-		Password: password,
-		DB:       db,
-	}, nil
+	return "8080"
 }
