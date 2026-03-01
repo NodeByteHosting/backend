@@ -104,24 +104,24 @@ func (h *SyncHandler) HandleFullSync(ctx context.Context, task *asynq.Task) erro
 		return h.failSync(ctx, payload.SyncLogID, "nests", err)
 	}
 
-	// Step 5: Sync Servers
-	if checkCancelled() {
-		return h.cancelSync(ctx, payload.SyncLogID, "Cancelled before servers sync")
-	}
-	h.updateProgress(ctx, payload.SyncLogID, "servers", 60)
-	if err := h.syncServers(ctx, payload.SyncLogID); err != nil {
-		return h.failSync(ctx, payload.SyncLogID, "servers", err)
-	}
-
-	// Step 6: Sync Users (optional)
+	// Step 5: Sync Users — BEFORE servers so ownerId lookups succeed
 	if !payload.SkipUsers {
 		if checkCancelled() {
 			return h.cancelSync(ctx, payload.SyncLogID, "Cancelled before users sync")
 		}
-		h.updateProgress(ctx, payload.SyncLogID, "users", 75)
+		h.updateProgress(ctx, payload.SyncLogID, "users", 60)
 		if err := h.syncUsers(ctx, payload.SyncLogID); err != nil {
 			return h.failSync(ctx, payload.SyncLogID, "users", err)
 		}
+	}
+
+	// Step 6: Sync Servers — users now exist so ownerId FK resolves correctly
+	if checkCancelled() {
+		return h.cancelSync(ctx, payload.SyncLogID, "Cancelled before servers sync")
+	}
+	h.updateProgress(ctx, payload.SyncLogID, "servers", 75)
+	if err := h.syncServers(ctx, payload.SyncLogID); err != nil {
+		return h.failSync(ctx, payload.SyncLogID, "servers", err)
 	}
 
 	// Step 7: Sync Server Subusers (Client API - selective)
@@ -266,8 +266,16 @@ func (h *SyncHandler) HandleSyncLocations(ctx context.Context, task *asynq.Task)
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
-
-	return h.syncLocations(ctx, payload.SyncLogID)
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "RUNNING", nil, nil, nil, map[string]interface{}{
+		"step": "locations", "lastUpdated": time.Now().Unix(),
+	})
+	if err := h.syncLocations(ctx, payload.SyncLogID); err != nil {
+		return h.failSync(ctx, payload.SyncLogID, "locations", err)
+	}
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "COMPLETED", nil, nil, nil, map[string]interface{}{
+		"step": "locations", "completed_at": time.Now().Unix(), "lastUpdated": time.Now().Unix(),
+	})
+	return nil
 }
 
 // HandleSyncNodes syncs only nodes
@@ -276,8 +284,16 @@ func (h *SyncHandler) HandleSyncNodes(ctx context.Context, task *asynq.Task) err
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
-
-	return h.syncNodes(ctx, payload.SyncLogID)
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "RUNNING", nil, nil, nil, map[string]interface{}{
+		"step": "nodes", "lastUpdated": time.Now().Unix(),
+	})
+	if err := h.syncNodes(ctx, payload.SyncLogID); err != nil {
+		return h.failSync(ctx, payload.SyncLogID, "nodes", err)
+	}
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "COMPLETED", nil, nil, nil, map[string]interface{}{
+		"step": "nodes", "completed_at": time.Now().Unix(), "lastUpdated": time.Now().Unix(),
+	})
+	return nil
 }
 
 // HandleSyncAllocations syncs only allocations
@@ -286,8 +302,16 @@ func (h *SyncHandler) HandleSyncAllocations(ctx context.Context, task *asynq.Tas
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
-
-	return h.syncAllocations(ctx, payload.SyncLogID)
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "RUNNING", nil, nil, nil, map[string]interface{}{
+		"step": "allocations", "lastUpdated": time.Now().Unix(),
+	})
+	if err := h.syncAllocations(ctx, payload.SyncLogID); err != nil {
+		return h.failSync(ctx, payload.SyncLogID, "allocations", err)
+	}
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "COMPLETED", nil, nil, nil, map[string]interface{}{
+		"step": "allocations", "completed_at": time.Now().Unix(), "lastUpdated": time.Now().Unix(),
+	})
+	return nil
 }
 
 // HandleSyncNests syncs nests and eggs
@@ -296,8 +320,16 @@ func (h *SyncHandler) HandleSyncNests(ctx context.Context, task *asynq.Task) err
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
-
-	return h.syncNestsAndEggs(ctx, payload.SyncLogID)
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "RUNNING", nil, nil, nil, map[string]interface{}{
+		"step": "nests", "lastUpdated": time.Now().Unix(),
+	})
+	if err := h.syncNestsAndEggs(ctx, payload.SyncLogID); err != nil {
+		return h.failSync(ctx, payload.SyncLogID, "nests", err)
+	}
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "COMPLETED", nil, nil, nil, map[string]interface{}{
+		"step": "nests", "completed_at": time.Now().Unix(), "lastUpdated": time.Now().Unix(),
+	})
+	return nil
 }
 
 // HandleSyncServers syncs servers
@@ -306,8 +338,16 @@ func (h *SyncHandler) HandleSyncServers(ctx context.Context, task *asynq.Task) e
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
-
-	return h.syncServers(ctx, payload.SyncLogID)
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "RUNNING", nil, nil, nil, map[string]interface{}{
+		"step": "servers", "lastUpdated": time.Now().Unix(),
+	})
+	if err := h.syncServers(ctx, payload.SyncLogID); err != nil {
+		return h.failSync(ctx, payload.SyncLogID, "servers", err)
+	}
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "COMPLETED", nil, nil, nil, map[string]interface{}{
+		"step": "servers", "completed_at": time.Now().Unix(), "lastUpdated": time.Now().Unix(),
+	})
+	return nil
 }
 
 // HandleSyncDatabases syncs server databases
@@ -316,8 +356,16 @@ func (h *SyncHandler) HandleSyncDatabases(ctx context.Context, task *asynq.Task)
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
-
-	return h.syncDatabases(ctx, payload.SyncLogID)
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "RUNNING", nil, nil, nil, map[string]interface{}{
+		"step": "databases", "lastUpdated": time.Now().Unix(),
+	})
+	if err := h.syncDatabases(ctx, payload.SyncLogID); err != nil {
+		return h.failSync(ctx, payload.SyncLogID, "databases", err)
+	}
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "COMPLETED", nil, nil, nil, map[string]interface{}{
+		"step": "databases", "completed_at": time.Now().Unix(), "lastUpdated": time.Now().Unix(),
+	})
+	return nil
 }
 
 // HandleSyncUsers syncs users
@@ -326,8 +374,16 @@ func (h *SyncHandler) HandleSyncUsers(ctx context.Context, task *asynq.Task) err
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
-
-	return h.syncUsers(ctx, payload.SyncLogID)
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "RUNNING", nil, nil, nil, map[string]interface{}{
+		"step": "users", "lastUpdated": time.Now().Unix(),
+	})
+	if err := h.syncUsers(ctx, payload.SyncLogID); err != nil {
+		return h.failSync(ctx, payload.SyncLogID, "users", err)
+	}
+	h.syncRepo.UpdateSyncLog(ctx, payload.SyncLogID, "COMPLETED", nil, nil, nil, map[string]interface{}{
+		"step": "users", "completed_at": time.Now().Unix(), "lastUpdated": time.Now().Unix(),
+	})
+	return nil
 }
 
 // HandleCleanupLogs cleans up old sync logs
@@ -346,7 +402,7 @@ func (h *SyncHandler) HandleCleanupLogs(ctx context.Context, task *asynq.Task) e
 
 	cutoff := time.Now().AddDate(0, 0, -days)
 
-	query := `DELETE FROM sync_logs WHERE created_at < $1`
+	query := `DELETE FROM sync_logs WHERE "startedAt" < $1`
 	result, err := h.db.Pool.Exec(ctx, query, cutoff)
 	if err != nil {
 		return fmt.Errorf("failed to cleanup logs: %w", err)
@@ -393,6 +449,21 @@ func (h *SyncHandler) syncLocations(ctx context.Context, syncLogID string) error
 		// Update progress every 10 items or at end
 		if (i+1)%10 == 0 || i == len(locations)-1 {
 			h.updateDetailedProgress(ctx, syncLogID, "locations", len(locations), i+1, fmt.Sprintf("Processing location %d/%d (ID: %d)", i+1, len(locations), loc.Attributes.ID))
+		}
+	}
+
+	// Remove stale locations no longer in the panel
+	if len(locations) > 0 {
+		ids := make([]interface{}, len(locations))
+		ph := make([]string, len(locations))
+		for i, loc := range locations {
+			ids[i] = loc.Attributes.ID
+			ph[i] = fmt.Sprintf("$%d", i+1)
+		}
+		if res, err := h.db.Pool.Exec(ctx, `DELETE FROM locations WHERE id NOT IN (`+strings.Join(ph, ",")+`)`, ids...); err != nil {
+			log.Warn().Err(err).Msg("Failed to delete stale locations")
+		} else if res.RowsAffected() > 0 {
+			log.Info().Int64("deleted", res.RowsAffected()).Msg("Deleted stale locations")
 		}
 	}
 
@@ -468,6 +539,21 @@ func (h *SyncHandler) syncNodes(ctx context.Context, syncLogID string) error {
 		}
 	}
 
+	// Remove stale nodes no longer in the panel
+	if len(nodes) > 0 {
+		ids := make([]interface{}, len(nodes))
+		ph := make([]string, len(nodes))
+		for i, node := range nodes {
+			ids[i] = node.Attributes.ID
+			ph[i] = fmt.Sprintf("$%d", i+1)
+		}
+		if res, err := h.db.Pool.Exec(ctx, `DELETE FROM nodes WHERE id NOT IN (`+strings.Join(ph, ",")+`)`, ids...); err != nil {
+			log.Warn().Err(err).Msg("Failed to delete stale nodes")
+		} else if res.RowsAffected() > 0 {
+			log.Info().Int64("deleted", res.RowsAffected()).Msg("Deleted stale nodes")
+		}
+	}
+
 	log.Info().Int("count", len(nodes)).Msg("Synced nodes")
 	h.updateDetailedProgress(ctx, syncLogID, "nodes", len(nodes), len(nodes), fmt.Sprintf("✓ Synced %d nodes", len(nodes)))
 	return nil
@@ -486,7 +572,8 @@ func (h *SyncHandler) syncAllocations(ctx context.Context, syncLogID string) err
 
 	totalAllocations := 0
 	processedAllocations := 0
-	batchSize := 500 // Insert 500 allocations at a time for better performance
+	batchSize := 500                   // Insert 500 allocations at a time for better performance
+	allSeenAllocIDs := []interface{}{} // collect all allocation IDs for stale cleanup
 
 	for nodeIdx, node := range nodes {
 		allocations, err := h.pteroClient.GetAllAllocationsForNode(ctx, node.Attributes.ID)
@@ -498,6 +585,10 @@ func (h *SyncHandler) syncAllocations(ctx context.Context, syncLogID string) err
 		h.updateDetailedProgress(ctx, syncLogID, "allocations", 0, processedAllocations, fmt.Sprintf("Processing node %d/%d (%s): %d allocations", nodeIdx+1, len(nodes), node.Attributes.Name, len(allocations)))
 
 		// Batch insert allocations
+		for _, alloc := range allocations {
+			allSeenAllocIDs = append(allSeenAllocIDs, alloc.Attributes.ID)
+		}
+
 		for batchStart := 0; batchStart < len(allocations); batchStart += batchSize {
 			batchEnd := batchStart + batchSize
 			if batchEnd > len(allocations) {
@@ -540,6 +631,22 @@ func (h *SyncHandler) syncAllocations(ctx context.Context, syncLogID string) err
 
 			// Update every batch
 			h.updateDetailedProgress(ctx, syncLogID, "allocations", 0, processedAllocations, fmt.Sprintf("Synced %d allocations from node %d/%d...", processedAllocations, nodeIdx+1, len(nodes)))
+		}
+	}
+
+	// Remove stale allocations no longer in the panel
+	if len(allSeenAllocIDs) > 0 {
+		ph := make([]string, len(allSeenAllocIDs))
+		for i := range allSeenAllocIDs {
+			ph[i] = fmt.Sprintf("$%d", i+1)
+		}
+		// Only delete allocations that belong to known panel nodes (nodeId IS NOT NULL)
+		if res, err := h.db.Pool.Exec(ctx,
+			`DELETE FROM allocations WHERE id NOT IN (`+strings.Join(ph, ",")+`)`,
+			allSeenAllocIDs...); err != nil {
+			log.Warn().Err(err).Msg("Failed to delete stale allocations")
+		} else if res.RowsAffected() > 0 {
+			log.Info().Int64("deleted", res.RowsAffected()).Msg("Deleted stale allocations")
 		}
 	}
 
@@ -654,6 +761,21 @@ func (h *SyncHandler) syncNestsAndEggs(ctx context.Context, syncLogID string) er
 		processedNests++
 	}
 
+	// Remove stale nests no longer in the panel (eggs cascade via FK)
+	if len(nests) > 0 {
+		ids := make([]interface{}, len(nests))
+		ph := make([]string, len(nests))
+		for i, n := range nests {
+			ids[i] = n.Attributes.ID
+			ph[i] = fmt.Sprintf("$%d", i+1)
+		}
+		if res, err := h.db.Pool.Exec(ctx, `DELETE FROM nests WHERE id NOT IN (`+strings.Join(ph, ",")+`)`, ids...); err != nil {
+			log.Warn().Err(err).Msg("Failed to delete stale nests")
+		} else if res.RowsAffected() > 0 {
+			log.Info().Int64("deleted", res.RowsAffected()).Msg("Deleted stale nests")
+		}
+	}
+
 	log.Info().Int("nests", len(nests)).Int("eggs", totalEggs).Msg("Synced nests and eggs")
 	h.updateDetailedProgress(ctx, syncLogID, "nests", len(nests), len(nests), fmt.Sprintf("✓ Synced %d nests and %d eggs", len(nests), totalEggs))
 	return nil
@@ -680,6 +802,14 @@ func (h *SyncHandler) syncServers(ctx context.Context, syncLogID string) error {
 			status = "suspended"
 		}
 
+		// Look up local owner — pterodactylId may not exist yet (users not yet synced).
+		// We allow NULL here and reconcile during users sync.
+		var ownerID *string
+		_ = h.db.Pool.QueryRow(ctx,
+			`SELECT id FROM users WHERE "pterodactylId" = $1 LIMIT 1`,
+			server.Attributes.User,
+		).Scan(&ownerID)
+
 		query := `
 			INSERT INTO servers (
 				id, "pterodactylId", uuid, "uuidShort", "externalId", "panelType",
@@ -688,7 +818,7 @@ func (h *SyncHandler) syncServers(ctx context.Context, syncLogID string) error {
 				"createdAt", "updatedAt"
 			) VALUES (
 				gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9,
-				(SELECT id FROM users WHERE "pterodactylId" = $10 LIMIT 1),
+				$10,
 				$11, $12, $13, $14, $15, NOW(), NOW()
 			)
 			ON CONFLICT ("pterodactylId") DO UPDATE SET
@@ -698,7 +828,7 @@ func (h *SyncHandler) syncServers(ctx context.Context, syncLogID string) error {
 				description = EXCLUDED.description,
 				status = EXCLUDED.status,
 				"isSuspended" = EXCLUDED."isSuspended",
-				"ownerId" = EXCLUDED."ownerId",
+				"ownerId" = COALESCE(EXCLUDED."ownerId", servers."ownerId"),
 				"nodeId" = EXCLUDED."nodeId",
 				"eggId" = EXCLUDED."eggId",
 				memory = EXCLUDED.memory,
@@ -716,7 +846,7 @@ func (h *SyncHandler) syncServers(ctx context.Context, syncLogID string) error {
 			server.Attributes.Description,
 			status,
 			server.Attributes.Suspended,
-			server.Attributes.User,
+			ownerID,
 			server.Attributes.Node,
 			server.Attributes.Egg,
 			server.Attributes.Limits.Memory,
@@ -731,7 +861,7 @@ func (h *SyncHandler) syncServers(ctx context.Context, syncLogID string) error {
 		if len(server.Relationships.Allocations.Data) > 0 {
 			for _, alloc := range server.Relationships.Allocations.Data {
 				_, err := h.db.Pool.Exec(ctx,
-					`UPDATE allocations SET server_id = (SELECT id FROM servers WHERE "pterodactylId" = $1 LIMIT 1), "updatedAt" = NOW() WHERE id = $2`,
+					`UPDATE allocations SET "serverId" = (SELECT id FROM servers WHERE "pterodactylId" = $1 LIMIT 1), "updatedAt" = NOW() WHERE id = $2`,
 					server.Attributes.ID, alloc.Attributes.ID)
 				if err != nil {
 					log.Warn().Err(err).Int("allocation_id", alloc.Attributes.ID).Msg("Failed to link allocation to server")
@@ -742,6 +872,23 @@ func (h *SyncHandler) syncServers(ctx context.Context, syncLogID string) error {
 		// Update progress every 25 servers
 		if (i+1)%25 == 0 || i == len(servers)-1 {
 			h.updateDetailedProgress(ctx, syncLogID, "servers", len(servers), i+1, fmt.Sprintf("Processing server %d/%d (%s)", i+1, len(servers), server.Attributes.Name))
+		}
+	}
+
+	// Remove stale panel servers no longer in Pterodactyl
+	if len(servers) > 0 {
+		ids := make([]interface{}, len(servers))
+		ph := make([]string, len(servers))
+		for i, srv := range servers {
+			ids[i] = srv.Attributes.ID
+			ph[i] = fmt.Sprintf("$%d", i+1)
+		}
+		if res, err := h.db.Pool.Exec(ctx,
+			`DELETE FROM servers WHERE "pterodactylId" IS NOT NULL AND "panelType" = 'pterodactyl' AND "pterodactylId" NOT IN (`+strings.Join(ph, ",")+`)`,
+			ids...); err != nil {
+			log.Warn().Err(err).Msg("Failed to delete stale servers")
+		} else if res.RowsAffected() > 0 {
+			log.Info().Int64("deleted", res.RowsAffected()).Msg("Deleted stale servers")
 		}
 	}
 
@@ -1062,14 +1209,14 @@ func (h *SyncHandler) syncServerSubusers(ctx context.Context, syncLogID string) 
 			// Insert subuser relationship
 			_, err = h.db.Pool.Exec(ctx, `
 				INSERT INTO server_subusers (
-					id, server_id, user_id, permissions, is_owner, last_synced_at
+					id, "serverId", "userId", permissions, "isOwner", "lastSyncedAt"
 				) VALUES (
 					gen_random_uuid(), $1, $2, $3, false, NOW()
 				)
-				ON CONFLICT (server_id, user_id) DO UPDATE SET
+				ON CONFLICT ("serverId", "userId") DO UPDATE SET
 					permissions = EXCLUDED.permissions,
-					is_owner = EXCLUDED.is_owner,
-					last_synced_at = NOW()
+					"isOwner" = EXCLUDED."isOwner",
+					"lastSyncedAt" = NOW()
 			`, server.ID, userID, subuser.Attributes.Permissions)
 
 			if err != nil {
@@ -1083,16 +1230,16 @@ func (h *SyncHandler) syncServerSubusers(ctx context.Context, syncLogID string) 
 		// Also mark owner in server_subusers table
 		_, err = h.db.Pool.Exec(ctx, `
 			INSERT INTO server_subusers (
-				id, server_id, user_id, permissions, is_owner, last_synced_at
+				id, "serverId", "userId", permissions, "isOwner", "lastSyncedAt"
 			) VALUES (
 				gen_random_uuid(), $1, 
 				(SELECT "ownerId" FROM servers WHERE id = $1),
 				ARRAY['*'], true, NOW()
 			)
-			ON CONFLICT (server_id, user_id) DO UPDATE SET
-				is_owner = true,
+			ON CONFLICT ("serverId", "userId") DO UPDATE SET
+				"isOwner" = true,
 				permissions = ARRAY['*'],
-				last_synced_at = NOW()
+				"lastSyncedAt" = NOW()
 		`, server.ID)
 
 		if err != nil {

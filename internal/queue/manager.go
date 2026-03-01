@@ -187,6 +187,48 @@ func (m *Manager) EnqueueSyncUsers(payload SyncPayload) (*asynq.TaskInfo, error)
 	return m.client.Enqueue(task)
 }
 
+// EnqueueSyncAllocations enqueues an allocations sync task
+func (m *Manager) EnqueueSyncAllocations(payload SyncPayload) (*asynq.TaskInfo, error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	task := asynq.NewTask(TypeSyncAllocations, data,
+		asynq.Queue(QueueDefault),
+		asynq.MaxRetry(3),
+		asynq.Timeout(10*time.Minute),
+	)
+	return m.client.Enqueue(task)
+}
+
+// EnqueueSyncNests enqueues a nests and eggs sync task
+func (m *Manager) EnqueueSyncNests(payload SyncPayload) (*asynq.TaskInfo, error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	task := asynq.NewTask(TypeSyncNests, data,
+		asynq.Queue(QueueDefault),
+		asynq.MaxRetry(3),
+		asynq.Timeout(5*time.Minute),
+	)
+	return m.client.Enqueue(task)
+}
+
+// EnqueueSyncDatabases enqueues a databases sync task
+func (m *Manager) EnqueueSyncDatabases(payload SyncPayload) (*asynq.TaskInfo, error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	task := asynq.NewTask(TypeSyncDatabases, data,
+		asynq.Queue(QueueDefault),
+		asynq.MaxRetry(3),
+		asynq.Timeout(15*time.Minute),
+	)
+	return m.client.Enqueue(task)
+}
+
 // EnqueueEmail enqueues an email send task
 func (m *Manager) EnqueueEmail(payload EmailPayload) (*asynq.TaskInfo, error) {
 	data, err := json.Marshal(payload)

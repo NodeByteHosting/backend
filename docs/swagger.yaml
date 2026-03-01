@@ -1,5 +1,63 @@
 basePath: /
 definitions:
+  auth.TokenPair:
+    properties:
+      accessToken:
+        type: string
+      expiresIn:
+        description: seconds until access token expires
+        type: integer
+      refreshToken:
+        type: string
+      tokenType:
+        type: string
+    type: object
+  handlers.AuthResponse:
+    properties:
+      accessToken:
+        description: For backward compatibility
+        type: string
+      error:
+        type: string
+      expiresIn:
+        description: For backward compatibility
+        type: integer
+      message:
+        type: string
+      refreshToken:
+        description: For backward compatibility
+        type: string
+      success:
+        type: boolean
+      token:
+        description: 'Deprecated: use tokens instead'
+        type: string
+      tokens:
+        $ref: '#/definitions/auth.TokenPair'
+      user:
+        $ref: '#/definitions/handlers.UserData'
+    type: object
+  handlers.ChangePasswordRequest:
+    properties:
+      currentPassword:
+        type: string
+      newPassword:
+        type: string
+    type: object
+  handlers.CredentialsRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  handlers.CredentialsValidateRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
   handlers.DispatchWebhookRequest:
     properties:
       data:
@@ -17,6 +75,26 @@ definitions:
       success:
         type: boolean
     type: object
+  handlers.ForgotPasswordRequest:
+    properties:
+      email:
+        type: string
+    type: object
+  handlers.LogoutRequest:
+    properties:
+      refreshToken:
+        type: string
+    type: object
+  handlers.MagicLinkRequest:
+    properties:
+      email:
+        type: string
+    type: object
+  handlers.MagicLinkVerifyRequest:
+    properties:
+      token:
+        type: string
+    type: object
   handlers.QueueEmailRequest:
     properties:
       data:
@@ -28,6 +106,37 @@ definitions:
       template:
         type: string
       to:
+        type: string
+    type: object
+  handlers.RefreshTokenRequest:
+    properties:
+      refreshToken:
+        type: string
+    type: object
+  handlers.RegisterUserRequest:
+    properties:
+      confirmPassword:
+        type: string
+      email:
+        type: string
+      firstName:
+        type: string
+      lastName:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.ResetPasswordRequest:
+    properties:
+      confirmPassword:
+        type: string
+      id:
+        type: string
+      password:
+        type: string
+      token:
         type: string
     type: object
   handlers.SuccessResponse:
@@ -118,6 +227,50 @@ definitions:
       autoSyncInterval:
         type: integer
     type: object
+  handlers.UpdateUserAccountRequest:
+    properties:
+      billingEmail:
+        type: string
+      companyName:
+        type: string
+      email:
+        type: string
+      firstName:
+        type: string
+      lastName:
+        type: string
+      phoneNumber:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.UserData:
+    properties:
+      email:
+        type: string
+      emailVerified:
+        type: string
+      firstName:
+        type: string
+      id:
+        type: string
+      isPterodactylAdmin:
+        type: boolean
+      isSystemAdmin:
+        type: boolean
+      isVirtfusionAdmin:
+        type: boolean
+      lastName:
+        type: string
+      pterodactylId:
+        type: integer
+      roles:
+        items:
+          type: string
+        type: array
+      username:
+        type: string
+    type: object
   types.CreateGameSessionRequest:
     properties:
       account_id:
@@ -127,6 +280,10 @@ definitions:
       profile_uuid:
         description: Profile/character UUID (optional if previously selected)
         example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+      server_id:
+        description: Server ID to link this session to (optional)
+        example: srv_abc123
         type: string
     type: object
   types.CreateGameSessionResponseDTO:
@@ -410,6 +567,207 @@ info:
   title: NodeByte API
   version: 0.2.0
 paths:
+  /api/admin/allocations:
+    get:
+      description: Returns paginated allocations across all nodes with filtering by
+        assignment status, node, and IP/alias search
+      parameters:
+      - default: all
+        description: Filter by assignment status
+        enum:
+        - all
+        - "yes"
+        - "no"
+        in: query
+        name: assigned
+        type: string
+      - description: Filter by node ID
+        in: query
+        name: nodeId
+        type: string
+      - description: Search by IP, alias, or port
+        in: query
+        name: search
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Items per page
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Allocations list with pagination
+          schema:
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: object
+      security:
+      - Bearer: []
+      summary: List all allocations
+      tags:
+      - Admin Nodes
+  /api/admin/locations:
+    get:
+      description: Returns all Pterodactyl panel locations with their node counts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Locations list
+          schema:
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: object
+      security:
+      - Bearer: []
+      summary: List all locations
+      tags:
+      - Admin Nodes
+  /api/admin/nodes:
+    get:
+      description: Returns a paginated list of all server nodes with location info,
+        server counts, and allocation counts
+      parameters:
+      - description: Search by name or FQDN
+        in: query
+        name: search
+        type: string
+      - default: all
+        description: Filter by maintenance mode
+        enum:
+        - all
+        - "yes"
+        - "no"
+        in: query
+        name: maintenance
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 25
+        description: Items per page
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Nodes list with pagination
+          schema:
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: object
+      security:
+      - Bearer: []
+      summary: List all nodes
+      tags:
+      - Admin Nodes
+  /api/admin/nodes/{id}/allocations:
+    get:
+      description: Returns paginated allocations for a specific node with optional
+        assigned filter
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: all
+        description: Filter by assignment status
+        enum:
+        - all
+        - "yes"
+        - "no"
+        in: query
+        name: assigned
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Items per page
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Allocations list with pagination
+          schema:
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: object
+      security:
+      - Bearer: []
+      summary: Get node allocations
+      tags:
+      - Admin Nodes
+  /api/admin/nodes/{id}/maintenance:
+    post:
+      description: Toggles the maintenance mode flag on a specific node
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Maintenance mode toggled
+          schema:
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: object
+      security:
+      - Bearer: []
+      summary: Toggle node maintenance mode
+      tags:
+      - Admin Nodes
   /api/admin/settings:
     get:
       description: Returns all configuration from Config table and Discord webhooks
@@ -1043,6 +1401,27 @@ paths:
       summary: Update sync settings (admin)
       tags:
       - Admin
+  /api/admin/sync/stream/{id}:
+    get:
+      description: Streams live sync log updates as Server-Sent Events until the sync
+        reaches a terminal state
+      parameters:
+      - description: Sync log ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Bearer JWT token
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - text/event-stream
+      responses: {}
+      summary: Stream sync progress (SSE)
+      tags:
+      - Admin
   /api/panel/counts:
     get:
       consumes:
@@ -1083,6 +1462,654 @@ paths:
       summary: Get public statistics
       tags:
       - Public
+  /api/v1/auth/check-email:
+    get:
+      consumes:
+      - application/json
+      description: Checks if an email address is already registered in the system
+      parameters:
+      - description: Email address to check
+        in: query
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email availability status
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid email
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Check Email Exists
+      tags:
+      - Authentication
+  /api/v1/auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Sends password reset email with reset token
+      parameters:
+      - description: User email
+        in: body
+        name: email
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reset email sent
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid email
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Forgot Password
+      tags:
+      - Authentication
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with email and password, returns JWT tokens
+      parameters:
+      - description: Login credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CredentialsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful with JWT tokens
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "401":
+          description: Invalid credentials or email not verified
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: User Login
+      tags:
+      - Authentication
+  /api/v1/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Invalidates refresh token and terminates user session
+      parameters:
+      - description: Optional refresh token to invalidate
+        in: body
+        name: logout
+        schema:
+          $ref: '#/definitions/handlers.LogoutRequest'
+      - description: Bearer token
+        example: Bearer eyJhbGc...
+        in: header
+        name: Authorization
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logged out successfully
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: User Logout
+      tags:
+      - Authentication
+  /api/v1/auth/magic-link:
+    post:
+      consumes:
+      - application/json
+      description: Sends a passwordless authentication magic link to user's email
+      parameters:
+      - description: User email
+        in: body
+        name: magicLink
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.MagicLinkRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Magic link sent
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid email
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Request Magic Link
+      tags:
+      - Authentication
+  /api/v1/auth/magic-link/verify:
+    post:
+      consumes:
+      - application/json
+      description: Verifies magic link token and authenticates user
+      parameters:
+      - description: Magic link token
+        in: body
+        name: verify
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.MagicLinkVerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Authentication successful with JWT tokens
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "401":
+          description: Invalid or expired token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Verify Magic Link
+      tags:
+      - Authentication
+  /api/v1/auth/me:
+    get:
+      consumes:
+      - application/json
+      description: Returns authenticated user information from JWT token
+      parameters:
+      - description: Bearer token
+        example: Bearer eyJhbGc...
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User data
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "401":
+          description: Missing or invalid token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Get Current User
+      tags:
+      - Authentication
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchanges a valid refresh token for new access and refresh tokens
+      parameters:
+      - description: Refresh token
+        in: body
+        name: refresh
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: New tokens generated
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Missing refresh token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "401":
+          description: Invalid or expired refresh token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Refresh Access Token
+      tags:
+      - Authentication
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Registers a new user account and sends verification email
+      parameters:
+      - description: Registration details
+        in: body
+        name: registration
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User registered successfully
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid request or validation error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "409":
+          description: Email already exists
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: User Registration
+      tags:
+      - Authentication
+  /api/v1/auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Resets user password using reset token from email
+      parameters:
+      - description: Reset token and new password
+        in: body
+        name: reset
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset successfully
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid request or weak password
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "404":
+          description: User not found or invalid token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Reset Password
+      tags:
+      - Authentication
+  /api/v1/auth/users/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves user information by user ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User information
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Get User By ID
+      tags:
+      - Authentication
+  /api/v1/auth/validate:
+    post:
+      consumes:
+      - application/json
+      description: Validates user credentials without creating a session
+      parameters:
+      - description: Credentials to validate
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CredentialsValidateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Credentials are valid
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Invalid credentials
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Validate Credentials
+      tags:
+      - Authentication
+  /api/v1/auth/verify-email:
+    post:
+      consumes:
+      - application/json
+      description: Verifies user email address with verification token
+      parameters:
+      - description: Verification token
+        in: body
+        name: verification
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email verified successfully
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid or missing token
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+      summary: Verify Email
+      tags:
+      - Authentication
+  /api/v1/dashboard/account:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves account information for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Account info retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user account
+      tags:
+      - Dashboard
+    put:
+      consumes:
+      - application/json
+      description: Updates account information for the authenticated user
+      parameters:
+      - description: Account update data
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateUserAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Account updated
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user account
+      tags:
+      - Dashboard
+  /api/v1/dashboard/account/change-email:
+    post:
+      consumes:
+      - application/json
+      description: Changes the user's email address. Requires current password for
+        verification. Clears email verification status and sends a verification email
+        to the new address.
+      parameters:
+      - description: Email change request
+        in: body
+        name: payload
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email updated
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Missing required fields
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized or wrong password
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Email already in use
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Request email change
+      tags:
+      - Dashboard
+  /api/v1/dashboard/account/password:
+    put:
+      consumes:
+      - application/json
+      description: Changes password for the authenticated user
+      parameters:
+      - description: Password change data
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password changed
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized or wrong password
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change user password
+      tags:
+      - Dashboard
+  /api/v1/dashboard/account/resend-verification:
+    post:
+      description: Resends the email verification email for the authenticated user.
+        Fails if email is already verified.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Verification email sent
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Email already verified
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Resend verification email
+      tags:
+      - Dashboard
+  /api/v1/dashboard/servers:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves paginated list of servers owned by the authenticated
+        user with search and filtering
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 12
+        description: Items per page
+        in: query
+        name: per_page
+        type: integer
+      - description: Search query
+        in: query
+        name: search
+        type: string
+      - description: Status filter
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Servers retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user servers
+      tags:
+      - Dashboard
+  /api/v1/dashboard/stats:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves statistics for the user's dashboard including server
+        counts and recent servers
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Dashboard stats retrieved
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get dashboard stats
+      tags:
+      - Dashboard
   /api/v1/email/queue:
     post:
       consumes:

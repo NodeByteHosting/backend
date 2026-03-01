@@ -72,7 +72,7 @@ func (m *BearerAuthMiddleware) Handler() fiber.Handler {
 		// Get Authorization header
 		authHeader := c.Get("Authorization")
 		if authHeader == "" {
-			log.Error().Msg("Missing Authorization header")
+			log.Error().Str("path", c.Path()).Str("method", c.Method()).Str("ip", c.IP()).Msg("Missing Authorization header")
 			return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{
 				Success: false,
 				Error:   "Missing Authorization header",
@@ -103,12 +103,8 @@ func (m *BearerAuthMiddleware) Handler() fiber.Handler {
 			})
 		}
 
-		// Decode the payload (second part) using base64url
-		payload := tokenParts[1]
-		// Add padding if needed (JWT uses base64url)
-		payload += strings.Repeat("=", (4-len(payload)%4)%4)
-
-		decodedPayload, err := base64.RawURLEncoding.DecodeString(payload)
+		// Decode the payload (second part) using base64url (JWT uses raw/unpadded base64url)
+		decodedPayload, err := base64.RawURLEncoding.DecodeString(tokenParts[1])
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{
 				Success: false,
@@ -141,12 +137,13 @@ func (m *BearerAuthMiddleware) Handler() fiber.Handler {
 			})
 		}
 
-		// Query database to verify user exists and is admin
+		// Query database to verify user exists and check admin access
 		var isSystemAdmin bool
+		var roles []string
 		err = m.db.Pool.QueryRow(c.Context(),
-			"SELECT \"isSystemAdmin\" FROM users WHERE id = $1 LIMIT 1",
+			`SELECT "isSystemAdmin", COALESCE(roles, '{}') FROM users WHERE id = $1 LIMIT 1`,
 			userID,
-		).Scan(&isSystemAdmin)
+		).Scan(&isSystemAdmin, &roles)
 		if err != nil {
 			log.Warn().Err(err).Str("user_id", userID).Msg("User not found in database or query error")
 			return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{
@@ -156,8 +153,17 @@ func (m *BearerAuthMiddleware) Handler() fiber.Handler {
 			})
 		}
 
-		if !isSystemAdmin {
-			log.Warn().Str("user_id", userID).Msg("Non-admin user attempted admin access")
+		// Check admin access: isSystemAdmin flag OR SUPER_ADMIN/ADMINISTRATOR role
+		hasAdminRole := false
+		for _, r := range roles {
+			if r == "SUPER_ADMIN" || r == "ADMINISTRATOR" {
+				hasAdminRole = true
+				break
+			}
+		}
+
+		if !isSystemAdmin && !hasAdminRole {
+			log.Warn().Str("user_id", userID).Strs("roles", roles).Msg("Non-admin user attempted admin access")
 			return c.Status(fiber.StatusForbidden).JSON(ErrorResponse{
 				Success: false,
 				Error:   "Admin access required",

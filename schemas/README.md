@@ -10,49 +10,93 @@ This directory contains modular SQL schema files that define the complete NodeBy
 |------|--------|---------|
 | `schema_01_users_auth.sql` | users, sessions, password_reset_tokens, verification_tokens | User authentication and account management |
 | `schema_02_pterodactyl_sync.sql` | locations, nodes, allocations, nests, eggs, egg_variables, egg_properties | Game panel infrastructure sync data |
-| `schema_03_servers.sql` | servers, server_variables, server_properties, server_databases, server_backups | Game server instances and configuration |
-| `schema_04_billing.sql` | products, invoices, invoice_items, payments | Billing and commerce system |
+| `schema_03_servers.sql` | servers, server_variables, server_properties, server_databases, server_backups | Server instances (game, VPS, email) and configuration |
+| `schema_04_billing.sql` | products, invoices, invoice_items, payments | Billing and commerce system with flexible product types |
 | `schema_05_support_tickets.sql` | support_tickets, support_ticket_replies | Customer support ticketing |
 | `schema_06_discord_webhooks.sql` | discord_webhooks | Discord webhook management for notifications |
 | `schema_07_sync_logs.sql` | sync_logs | Synchronization history from panels |
 | `schema_08_config.sql` | config | System configuration key-value store |
-| `schema_hytale.sql` | hytale_oauth_tokens, hytale_game_sessions | Hytale OAuth tokens and game sessions |
+| `schema_09_hytale.sql` | hytale_oauth_tokens, hytale_game_sessions | Hytale OAuth tokens and game sessions |
+| `schema_10_hytale_audit.sql` | hytale_audit_logs | Hytale token and session audit logging |
+| `schema_11_hytale_server_logs.sql` | hytale_server_logs, hytale_log_sync_state | Persistent Hytale game server logs |
+| `schema_12_server_subusers.sql` | server_subusers | User-server relationships with flexible permissions |
+| `schema_13_hytale_server_link.sql` | hytale_game_sessions (extends) | Link game sessions to specific servers |
+| `schema_14_partners.sql` | partners, partner_services, partner_revenue_sharing | Partner management and integration |
+| `schema_15_careers.sql` | job_positions, job_applications, job_application_activity | Careers page and job application tracking |
 
 ## Quick Start
 
-### Linux / macOS
+### All Platforms (Using Make)
 
 ```bash
-cd backend/schemas
-chmod +x init-database.sh
-./init-database.sh "postgresql://user:password@localhost:5432/nodebyte"
+cd backend
+
+# Build the database tool
+make build-tools
+
+# Initialize fresh database
+make db-init
+
+# Or run interactive migration
+make db-migrate
 ```
 
-### Windows
+### Using Binary Directly
 
-```cmd
-cd backend\schemas
-init-database.bat "postgresql://user:password@localhost:5432/nodebyte"
+```bash
+cd backend
+
+# Build
+go build -o bin/db ./cmd/db
+
+# Initialize
+./bin/db init -database "postgresql://user:password@localhost:5432/nodebyte"
+
+# Migrate
+./bin/db migrate -database "postgresql://user:password@localhost:5432/nodebyte"
+
+# List schemas
+./bin/db list
+```
+
+### Development: Migrating New Schemas
+
+After pulling latest code with new schema files, use the migration tool:
+
+```bash
+cd backend
+
+# Interactive: Choose which schemas to migrate
+make db-migrate
+
+# Or migrate specific schema
+make db-migrate-schema SCHEMA=schema_14_partners.sql
+
+# Or reset everything (careful!)
+make db-reset
+```REM Interactive: Choose which schemas to migrate
+migrate-schemas.bat "postgresql://user:password@localhost:5432/nodebyte"
+```
+
+**Using the Go binary directly:**
+```bash
+./bin/migrate -database "postgresql://user:password@localhost:5432/nodebyte"
+./bin/migrate -database "postgresql://user:password@localhost:5432/nodebyte" -schema schema_14_partners.sql
 ```
 
 ### Manual Setup
 
 If you prefer to execute schemas manually:
+## For More Information
 
-```bash
-psql postgresql://user:password@localhost:5432/nodebyte -f schema_01_users_auth.sql
-psql postgresql://user:password@localhost:5432/nodebyte -f schema_02_pterodactyl_sync.sql
-psql postgresql://user:password@localhost:5432/nodebyte -f schema_03_servers.sql
-psql postgresql://user:password@localhost:5432/nodebyte -f schema_04_billing.sql
-psql postgresql://user:password@localhost:5432/nodebyte -f schema_05_support_tickets.sql
-psql postgresql://user:password@localhost:5432/nodebyte -f schema_06_discord_webhooks.sql
-psql postgresql://user:password@localhost:5432/nodebyte -f schema_07_sync_logs.sql
-psql postgresql://user:password@localhost:5432/nodebyte -f schema_08_config.sql
-psql postgresql://user:password@localhost:5432/nodebyte -f schema_hytale.sql
-```
+See [DATABASE_TOOLS.md](../DATABASE_TOOLS.md) for comprehensive documentation on:
+- Building the database tool
+- Using all commands (init, migrate, reset, list)
+- Environment variables and configuration
+- Troubleshooting
+- Development workflow
 
 ## Schema Details
-
 ### Users & Authentication
 
 **Tables:**
@@ -172,6 +216,36 @@ psql postgresql://user:password@localhost:5432/nodebyte -f schema_hytale.sql
 - Game profile association
 - Session token and identity token storage
 - Automatic expiry management
+
+### Partners
+
+**Tables:**
+- `partners` - Partner companies and integrations
+- `partner_services` - Services provided by partners
+- `partner_revenue_sharing` - Commission and payout configuration
+
+**Key Features:**
+- Support for multiple partner types (hosting provider, integration, reseller, affiliate)
+- Partnership status tracking (active, inactive, pending, suspended)
+- Service configuration storage
+- Commission structure management (percentage, fixed, tiered)
+- Payout frequency and method tracking
+- Featured partner highlighting
+
+### Careers
+
+**Tables:**
+- `job_positions` - Open job positions
+- `job_applications` - Applications from candidates
+- `job_application_activity` - Activity log and status changes
+
+**Key Features:**
+- Job position with full details (salary, location, remote options, skills required)
+- Multi-step application tracking (new, reviewing, shortlisted, rejected, offered, hired)
+- Candidate rating and internal notes
+- Application activity logging for audit trail
+- Support for custom screening questions via JSON
+- Department and employment type filtering
 
 ## Database Requirements
 
