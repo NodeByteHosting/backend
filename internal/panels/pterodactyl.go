@@ -203,10 +203,10 @@ type PteroServer struct {
 		Nest       int `json:"nest"`
 		Egg        int `json:"egg"`
 		Container  struct {
-			StartupCommand string            `json:"startup_command"`
-			Image          string            `json:"image"`
-			Installed      int               `json:"installed"`
-			Environment    map[string]string `json:"environment"`
+			StartupCommand string                 `json:"startup_command"`
+			Image          string                 `json:"image"`
+			Installed      int                    `json:"installed"`
+			Environment    map[string]interface{} `json:"environment"`
 		} `json:"container"`
 		CreatedAt string `json:"created_at"`
 		UpdatedAt string `json:"updated_at"`
@@ -315,7 +315,18 @@ func (c *PterodactylClient) doRequest(ctx context.Context, method, path string, 
 		req.Header.Set("CF-Access-Client-Secret", c.cfAccessSecret)
 	}
 
-	return c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		fmt.Printf("ERROR: Pterodactyl API returned %d for %s %s: %s\n", resp.StatusCode, method, url, string(body))
+		// Return a synthetic response with the status so callers can handle it
+		resp.Body = io.NopCloser(strings.NewReader(string(body)))
+	}
+	return resp, nil
 }
 
 // doClientRequest performs an HTTP request to the Pterodactyl Client API using the client API key
@@ -769,9 +780,19 @@ func (c *PterodactylClient) getAllWithPagination(ctx context.Context, path strin
 		}
 
 		var paginated PaginatedResponse
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", readErr)
+		}
 		if err := json.Unmarshal(body, &paginated); err != nil {
+			fmt.Printf("ERROR: failed to unmarshal paginated response from %s: %v\nBody: %s\n", fullPath, err, string(body))
 			return nil, err
+		}
+
+		// Log pagination info on first page
+		if page == 1 {
+			fmt.Printf("DEBUG: Pagination for %s — total=%d pages=%d\n",
+				fullPath, paginated.Meta.Pagination.Total, paginated.Meta.Pagination.TotalPages)
 		}
 
 		// Unmarshal data array
@@ -783,7 +804,8 @@ func (c *PterodactylClient) getAllWithPagination(ctx context.Context, path strin
 		for _, item := range dataItems {
 			unmarshaled, err := unmarshal(item)
 			if err != nil {
-				continue // Skip items that fail to unmarshal
+				fmt.Printf("WARN: failed to unmarshal item from %s: %v\nItem: %s\n", fullPath, err, string(item))
+				continue
 			}
 			allItems = append(allItems, unmarshaled)
 		}

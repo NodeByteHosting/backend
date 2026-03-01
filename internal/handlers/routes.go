@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"os"
+
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/nodebyte/backend/internal/auth"
 	"github.com/nodebyte/backend/internal/config"
 	"github.com/nodebyte/backend/internal/database"
 	"github.com/nodebyte/backend/internal/middleware"
@@ -11,6 +14,16 @@ import (
 
 // SetupRoutes configures all API routes
 func SetupRoutes(app *fiber.App, db *database.DB, queueManager *queue.Manager, apiKeyMiddleware *APIKeyMiddleware, cfg *config.Config) {
+	// Initialize JWT service
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = os.Getenv("NEXTAUTH_SECRET")
+	}
+	if jwtSecret == "" {
+		panic("JWT_SECRET or NEXTAUTH_SECRET must be set")
+	}
+	jwtService := auth.NewJWTService(jwtSecret)
+
 	// Health check route (public - no authentication required)
 	app.Get("/health", healthCheck(db, queueManager))
 
@@ -20,7 +33,7 @@ func SetupRoutes(app *fiber.App, db *database.DB, queueManager *queue.Manager, a
 	app.Get("/api/panel/counts", statsHandler.GetPanelCounts)
 
 	// Auth routes (public - no authentication required)
-	authHandler := NewAuthHandler(db, queueManager)
+	authHandler := NewAuthHandler(db, queueManager, jwtService)
 	app.Post("/api/v1/auth/login", authHandler.AuthenticateUser)
 	app.Post("/api/v1/auth/register", authHandler.RegisterUser)
 	app.Post("/api/v1/auth/validate", authHandler.ValidateCredentials)
@@ -29,6 +42,9 @@ func SetupRoutes(app *fiber.App, db *database.DB, queueManager *queue.Manager, a
 	app.Post("/api/v1/auth/reset-password", authHandler.ResetPassword)
 	app.Post("/api/v1/auth/magic-link", authHandler.RequestMagicLink)
 	app.Post("/api/v1/auth/magic-link/verify", authHandler.VerifyMagicLink)
+	app.Post("/api/v1/auth/refresh", authHandler.RefreshToken)
+	app.Post("/api/v1/auth/logout", authHandler.Logout)
+	app.Get("/api/v1/auth/me", authHandler.GetCurrentUser)
 	app.Get("/api/v1/auth/check-email", authHandler.CheckEmailExists)
 	app.Get("/api/v1/auth/users/:id", authHandler.GetUserByID)
 
@@ -58,6 +74,14 @@ func SetupRoutes(app *fiber.App, db *database.DB, queueManager *queue.Manager, a
 	app.Post("/api/v1/hytale/server-logs", hytaleServerLogsHandler.CreateServerLogs)
 	app.Get("/api/v1/hytale/server-logs/count", hytaleServerLogsHandler.GetHytaleServerLogsCount)
 
+	// SSE sync stream — MUST be registered before adminGroup is created.
+	// app.Group("/api/admin", mw) registers mw as a prefix-level Use() handler that
+	// intercepts ALL /api/admin/* requests, including those registered on app directly.
+	// Auth is handled inside the handler via ?token= query param (EventSource cannot
+	// send custom headers).
+	syncStreamHandler := NewSyncStreamHandler(db)
+	app.Get("/api/admin/sync/stream/:id", syncStreamHandler.StreamSyncProgress)
+
 	// Admin settings routes (require bearer token auth) - MUST BE BEFORE /api group
 	bearerAuth := NewBearerAuthMiddleware(db)
 	adminGroup := app.Group("/api/admin", bearerAuth.Handler())
@@ -83,6 +107,28 @@ func SetupRoutes(app *fiber.App, db *database.DB, queueManager *queue.Manager, a
 	adminGroup.Patch("/settings/webhooks", webhooksHandler.TestWebhook)
 	adminGroup.Delete("/settings/webhooks", webhooksHandler.DeleteWebhook)
 
+	// Admin user management routes
+	adminUserHandler := NewAdminUserHandler(db)
+	adminGroup.Get("/users", adminUserHandler.GetUsers)
+	adminGroup.Post("/users/roles", adminUserHandler.UpdateUserRoles)
+
+	// Admin server management routes
+	adminServerHandler := NewAdminServerHandler(db)
+	adminGroup.Get("/servers", adminServerHandler.GetServers)
+
+	// Admin node/location routes
+	nodeHandler := NewAdminNodeHandler(db)
+	adminGroup.Get("/nodes", nodeHandler.GetNodes)
+	adminGroup.Get("/nodes/:id/allocations", nodeHandler.GetNodeAllocations)
+	adminGroup.Patch("/nodes/:id/maintenance", nodeHandler.ToggleNodeMaintenance)
+	adminGroup.Get("/locations", nodeHandler.GetLocations)
+	adminGroup.Get("/allocations", nodeHandler.GetAllAllocations)
+
+	// Admin egg/nest routes
+	eggHandler := NewAdminEggHandler(db)
+	adminGroup.Get("/nests", eggHandler.GetNests)
+	adminGroup.Get("/eggs", eggHandler.GetEggs)
+
 	// Admin sync routes
 	adminSyncHandler := NewAdminSyncHandler(db, queueManager)
 	adminGroup.Get("/sync", adminSyncHandler.GetSyncStatusAdmin)
@@ -91,6 +137,20 @@ func SetupRoutes(app *fiber.App, db *database.DB, queueManager *queue.Manager, a
 	adminGroup.Get("/sync/logs", adminSyncHandler.GetSyncLogs)
 	adminGroup.Get("/sync/settings", adminSyncHandler.GetSyncSettingsAdmin)
 	adminGroup.Post("/sync/settings", adminSyncHandler.UpdateSyncSettingsAdmin)
+
+	// Admin stats routes (already exist)
+	adminGroup.Get("/stats", statsHandler.GetAdminStats)
+
+	// Bearer-authenticated user routes (dashboard)
+	userRoutes := app.Group("/api/v1", bearerAuth.Handler())
+	dashboardHandler := NewDashboardHandler(db, queueManager)
+	userRoutes.Get("/dashboard/stats", dashboardHandler.GetDashboardStats)
+	userRoutes.Get("/dashboard/servers", dashboardHandler.GetUserServers)
+	userRoutes.Get("/dashboard/account", dashboardHandler.GetUserAccount)
+	userRoutes.Put("/dashboard/account", dashboardHandler.UpdateUserAccount)
+	userRoutes.Put("/dashboard/account/password", dashboardHandler.ChangePassword)
+	userRoutes.Post("/dashboard/account/resend-verification", dashboardHandler.ResendVerificationEmail)
+	userRoutes.Post("/dashboard/account/change-email", dashboardHandler.RequestEmailChange)
 
 	// Protected routes (require API key or bearer token) - AFTER admin routes
 	protected := app.Group("/api", apiKeyMiddleware.Handler())

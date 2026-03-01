@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -396,12 +397,17 @@ func (h *AdminWebhooksHandler) TestWebhook(c *fiber.Ctx) error {
 
 // Helper functions
 
-// isValidDiscordWebhookURL validates if a URL is a valid Discord webhook URL
+// isValidDiscordWebhookURL validates if a URL is a valid Discord webhook URL.
+// Accepts discord.com directly or proxy URLs (e.g. gateway.nodebyte.host/proxy/discord/webhooks/...)
+// as long as the URL is HTTPS and the path contains "/webhooks/".
 func isValidDiscordWebhookURL(webhookURL string) bool {
 	parsedURL, err := url.Parse(webhookURL)
 	if err != nil {
 		return false
 	}
-	// Check if it's a Discord webhook URL
-	return parsedURL.Scheme == "https" && parsedURL.Host == "discord.com"
+	if parsedURL.Scheme != "https" || parsedURL.Host == "" {
+		return false
+	}
+	// Allow discord.com directly or any proxy that forwards to the webhooks endpoint
+	return parsedURL.Host == "discord.com" || strings.Contains(parsedURL.Path, "/webhooks/")
 }

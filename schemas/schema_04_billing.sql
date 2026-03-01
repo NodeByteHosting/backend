@@ -9,99 +9,126 @@ CREATE TABLE IF NOT EXISTS products (
     slug TEXT NOT NULL UNIQUE,
     description TEXT,
     
-    panel_type TEXT DEFAULT 'pterodactyl',
+    -- Product type classification for services page filtering
+    -- Values: game_server, vps, email, web_hosting, database, cdn, etc.
+    "serverType" TEXT NOT NULL DEFAULT 'game_server',
     
-    egg_id INTEGER REFERENCES eggs(id) ON DELETE SET NULL,
-    nest_id INTEGER REFERENCES nests(id) ON DELETE SET NULL,
+    -- Panel integration (specific to game_server type)
+    "panelType" TEXT DEFAULT 'pterodactyl',
     
+    -- Pterodactyl specific (for game_server type)
+    "eggId" INTEGER REFERENCES eggs(id) ON DELETE SET NULL,
+    "nestId" INTEGER REFERENCES nests(id) ON DELETE SET NULL,
+    
+    -- Pricing
     price DECIMAL(10, 2) NOT NULL,
-    billing_cycle TEXT DEFAULT 'monthly',
-    is_free BOOLEAN DEFAULT false,
+    "billingCycle" TEXT DEFAULT 'monthly',
+    "isFree" BOOLEAN DEFAULT false,
     
-    specs_memory INTEGER,
-    specs_disk INTEGER,
-    specs_cpu DECIMAL(5, 2),
+    -- Flexible specs for different product types
+    -- game_server: memory (MB), disk (GB), cpu (cores)
+    -- vps: memory (GB), disk (GB), vcpu (cores), bandwidth (Gbps)
+    -- email: storage (GB), mailboxes, etc
+    "specsMemory" INTEGER,           -- In MB for game servers, GB for VPS
+    "specsDisk" INTEGER,             -- In GB
+    "specsCpu" DECIMAL(5, 2),        -- In cores
+    "specsBandwidth" DECIMAL(5, 2),  -- In Gbps (for VPS/hosting)
+    "specsMailboxes" INTEGER,        -- For email hosting
+    "specsStorage" INTEGER,          -- In GB (for email/storage)
     
-    created_by_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    -- Features stored as JSONB for flexibility across product types
+    -- Examples:
+    -- game_server: {"autoRestart": true, "dailyBackups": true, "console": true}
+    -- vps: {"rootAccess": true, "snapshots": true, "firewalling": true, "ddosProtection": false}
+    -- email: {"spamFilter": true, "virusScanning": true, "webmail": true}
+    features JSONB DEFAULT '{}',
     
-    is_active BOOLEAN DEFAULT true,
-    is_featured BOOLEAN DEFAULT false,
+    -- Optional description of what's included
+    "includeDescription" TEXT,
     
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP
+    -- Metadata
+    "createdById" TEXT REFERENCES users(id) ON DELETE SET NULL,
+    
+    "isActive" BOOLEAN DEFAULT true,
+    "isFeatured" BOOLEAN DEFAULT false,
+    
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deletedAt" TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
-CREATE INDEX IF NOT EXISTS idx_products_egg_id ON products(egg_id);
-CREATE INDEX IF NOT EXISTS idx_products_created_by_id ON products(created_by_id);
-CREATE INDEX IF NOT EXISTS idx_products_is_active ON products(is_active);
+CREATE INDEX IF NOT EXISTS idx_products_server_type ON products("serverType");
+CREATE INDEX IF NOT EXISTS idx_products_egg_id ON products("eggId");
+CREATE INDEX IF NOT EXISTS idx_products_created_by_id ON products("createdById");
+CREATE INDEX IF NOT EXISTS idx_products_is_active ON products("isActive");
+CREATE INDEX IF NOT EXISTS idx_products_active_featured ON products("isActive", "isFeatured") WHERE "isActive" = true;
 
 -- Invoices (billing invoices)
 CREATE TABLE IF NOT EXISTS invoices (
     id TEXT PRIMARY KEY,
-    invoice_number TEXT NOT NULL UNIQUE,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "invoiceNumber" TEXT NOT NULL UNIQUE,
+    "userId" TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     
     amount DECIMAL(10, 2) NOT NULL,
     tax DECIMAL(10, 2) DEFAULT 0,
     total DECIMAL(10, 2) NOT NULL,
     
     status TEXT DEFAULT 'unpaid',
-    payment_method TEXT,
-    paid_at TIMESTAMP,
-    due_at TIMESTAMP,
+    "paymentMethod" TEXT,
+    "paidAt" TIMESTAMP,
+    "dueAt" TIMESTAMP,
     
     notes TEXT,
     
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deletedAt" TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices(user_id);
-CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);
+CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices("userId");
+CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices("invoiceNumber");
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
-CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON invoices(created_at);
+CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON invoices("createdAt");
 
 -- Invoice Items (line items in invoices)
 CREATE TABLE IF NOT EXISTS invoice_items (
     id TEXT PRIMARY KEY,
-    invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    "invoiceId" TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     
     description TEXT NOT NULL,
     quantity INTEGER DEFAULT 1,
-    unit_price DECIMAL(10, 2) NOT NULL,
+    "unitPrice" DECIMAL(10, 2) NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
     
-    product_id TEXT REFERENCES products(id) ON DELETE SET NULL,
-    server_id TEXT REFERENCES servers(id) ON DELETE SET NULL,
+    "productId" TEXT REFERENCES products(id) ON DELETE SET NULL,
+    "serverId" TEXT REFERENCES servers(id) ON DELETE SET NULL,
     
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items(invoice_id);
-CREATE INDEX IF NOT EXISTS idx_invoice_items_product_id ON invoice_items(product_id);
-CREATE INDEX IF NOT EXISTS idx_invoice_items_server_id ON invoice_items(server_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items("invoiceId");
+CREATE INDEX IF NOT EXISTS idx_invoice_items_product_id ON invoice_items("productId");
+CREATE INDEX IF NOT EXISTS idx_invoice_items_server_id ON invoice_items("serverId");
 
 -- Payments (payment records)
 CREATE TABLE IF NOT EXISTS payments (
     id TEXT PRIMARY KEY,
-    invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "invoiceId" TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    "userId" TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     
     amount DECIMAL(10, 2) NOT NULL,
-    payment_method TEXT NOT NULL,
+    "paymentMethod" TEXT NOT NULL,
     
-    external_transaction_id TEXT UNIQUE,
+    "externalTransactionId" TEXT UNIQUE,
     
     status TEXT DEFAULT 'completed',
     notes TEXT,
     
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_payments_invoice_id ON payments(invoice_id);
-CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
-CREATE INDEX IF NOT EXISTS idx_payments_external_transaction_id ON payments(external_transaction_id);
+CREATE INDEX IF NOT EXISTS idx_payments_invoice_id ON payments("invoiceId");
+CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments("userId");
+CREATE INDEX IF NOT EXISTS idx_payments_external_transaction_id ON payments("externalTransactionId");

@@ -10,8 +10,7 @@ CREATE TABLE IF NOT EXISTS hytale_oauth_tokens (
     scope TEXT NOT NULL DEFAULT 'openid offline auth:server',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_refreshed_at TIMESTAMP,
-    CONSTRAINT hytale_oauth_tokens_account_id_key UNIQUE (account_id)
+    last_refreshed_at TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_hytale_oauth_tokens_account_id ON hytale_oauth_tokens(account_id);
@@ -23,6 +22,7 @@ CREATE TABLE IF NOT EXISTS hytale_game_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id UUID NOT NULL,
     profile_uuid UUID NOT NULL,
+    server_id TEXT,
     session_token TEXT NOT NULL,
     identity_token TEXT NOT NULL,
     expires_at TIMESTAMP NOT NULL,

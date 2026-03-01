@@ -4,11 +4,13 @@ import (
 	"database/sql"
 	"errors"
 	"regexp"
+	"time"
 	"unicode"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
 
+	"github.com/nodebyte/backend/internal/auth"
 	"github.com/nodebyte/backend/internal/database"
 	"github.com/nodebyte/backend/internal/queue"
 )
@@ -17,13 +19,15 @@ import (
 type AuthHandler struct {
 	db           *database.DB
 	queueManager *queue.Manager
+	jwtService   *auth.JWTService
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(db *database.DB, queueManager *queue.Manager) *AuthHandler {
+func NewAuthHandler(db *database.DB, queueManager *queue.Manager, jwtService *auth.JWTService) *AuthHandler {
 	return &AuthHandler{
 		db:           db,
 		queueManager: queueManager,
+		jwtService:   jwtService,
 	}
 }
 
@@ -35,11 +39,15 @@ type CredentialsRequest struct {
 
 // AuthResponse represents an authentication response
 type AuthResponse struct {
-	Success bool      `json:"success"`
-	Message string    `json:"message,omitempty"`
-	Error   string    `json:"error,omitempty"`
-	User    *UserData `json:"user,omitempty"`
-	Token   string    `json:"token,omitempty"`
+	Success      bool            `json:"success"`
+	Message      string          `json:"message,omitempty"`
+	Error        string          `json:"error,omitempty"`
+	User         *UserData       `json:"user,omitempty"`
+	Token        string          `json:"token,omitempty"` // Deprecated: use tokens instead
+	Tokens       *auth.TokenPair `json:"tokens,omitempty"`
+	AccessToken  string          `json:"accessToken,omitempty"`  // For backward compatibility
+	RefreshToken string          `json:"refreshToken,omitempty"` // For backward compatibility
+	ExpiresIn    int64           `json:"expiresIn,omitempty"`    // For backward compatibility
 }
 
 // UserData represents user information returned during auth
@@ -103,7 +111,17 @@ func validateEmail(email string) error {
 }
 
 // AuthenticateUser handles user login with credentials
-// POST /api/v1/auth/login
+// @Summary User Login
+// @Description Authenticates a user with email and password, returns JWT tokens
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param credentials body CredentialsRequest true "Login credentials"
+// @Success 200 {object} AuthResponse "Login successful with JWT tokens"
+// @Failure 400 {object} AuthResponse "Invalid request"
+// @Failure 401 {object} AuthResponse "Invalid credentials or email not verified"
+// @Failure 500 {object} AuthResponse "Internal server error"
+// @Router /api/v1/auth/login [post]
 func (h *AuthHandler) AuthenticateUser(c *fiber.Ctx) error {
 	var req CredentialsRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -153,7 +171,42 @@ func (h *AuthHandler) AuthenticateUser(c *fiber.Ctx) error {
 		})
 	}
 
-	// Return user data
+	// Generate JWT tokens
+	claims := &auth.Claims{
+		UserID:             user.ID,
+		Email:              user.Email,
+		Username:           user.Username.String,
+		FirstName:          getStringPointer(user.FirstName),
+		LastName:           getStringPointer(user.LastName),
+		Roles:              user.Roles,
+		IsPterodactylAdmin: user.IsPterodactylAdmin,
+		IsVirtfusionAdmin:  user.IsVirtfusionAdmin,
+		IsSystemAdmin:      user.IsSystemAdmin,
+		PterodactylID:      getInt64Pointer(user.PterodactylID),
+		EmailVerified:      formatNullTime(user.EmailVerified),
+	}
+
+	tokenPair, err := h.jwtService.GenerateTokenPair(claims)
+	if err != nil {
+		log.Error().Err(err).Str("userID", user.ID).Msg("Failed to generate tokens")
+		return c.Status(fiber.StatusInternalServerError).JSON(AuthResponse{
+			Success: false,
+			Error:   "token_generation_failed",
+		})
+	}
+
+	// Store refresh token in session
+	expiresAt := time.Now().Add(h.jwtService.GetRefreshTokenTTL())
+	_, err = h.db.CreateSession(c.Context(), user.ID, tokenPair.RefreshToken, expiresAt)
+	if err != nil {
+		log.Error().Err(err).Str("userID", user.ID).Msg("Failed to create session")
+		return c.Status(fiber.StatusInternalServerError).JSON(AuthResponse{
+			Success: false,
+			Error:   "session_creation_failed",
+		})
+	}
+
+	// Return user data with tokens
 	userData := &UserData{
 		ID:                 user.ID,
 		Email:              user.Email,
@@ -165,13 +218,17 @@ func (h *AuthHandler) AuthenticateUser(c *fiber.Ctx) error {
 		IsVirtfusionAdmin:  user.IsVirtfusionAdmin,
 		IsSystemAdmin:      user.IsSystemAdmin,
 		PterodactylID:      getInt64Pointer(user.PterodactylID),
-		EmailVerified:      formatTime(nil),
+		EmailVerified:      formatNullTime(user.EmailVerified),
 	}
 
 	return c.Status(fiber.StatusOK).JSON(AuthResponse{
-		Success: true,
-		Message: "Login successful",
-		User:    userData,
+		Success:      true,
+		Message:      "Login successful",
+		User:         userData,
+		Tokens:       tokenPair,
+		AccessToken:  tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresIn:    tokenPair.ExpiresIn,
 	})
 }
 
@@ -186,7 +243,17 @@ type RegisterUserRequest struct {
 }
 
 // RegisterUser handles user registration
-// POST /api/v1/auth/register
+// @Summary User Registration
+// @Description Registers a new user account and sends verification email
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param registration body RegisterUserRequest true "Registration details"
+// @Success 201 {object} AuthResponse "User registered successfully"
+// @Failure 400 {object} AuthResponse "Invalid request or validation error"
+// @Failure 409 {object} AuthResponse "Email already exists"
+// @Failure 500 {object} AuthResponse "Internal server error"
+// @Router /api/v1/auth/register [post]
 func (h *AuthHandler) RegisterUser(c *fiber.Ctx) error {
 	var req RegisterUserRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -306,7 +373,17 @@ type VerifyEmailRequest struct {
 }
 
 // VerifyEmail handles email verification
-// POST /api/v1/auth/verify-email
+// @Summary Verify Email
+// @Description Verifies user email address with verification token
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param verification body map[string]string true "Verification token" example({"token":"abc123"})
+// @Success 200 {object} AuthResponse "Email verified successfully"
+// @Failure 400 {object} AuthResponse "Invalid or missing token"
+// @Failure 404 {object} AuthResponse "User not found"
+// @Failure 500 {object} AuthResponse "Internal server error"
+// @Router /api/v1/auth/verify-email [post]
 func (h *AuthHandler) VerifyEmail(c *fiber.Ctx) error {
 	var req VerifyEmailRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -344,7 +421,17 @@ type ForgotPasswordRequest struct {
 }
 
 // ForgotPassword handles forgot password requests
-// POST /api/v1/auth/forgot-password
+// @Summary Forgot Password
+// @Description Sends password reset email with reset token
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param email body ForgotPasswordRequest true "User email"
+// @Success 200 {object} AuthResponse "Reset email sent"
+// @Failure 400 {object} AuthResponse "Invalid email"
+// @Failure 404 {object} AuthResponse "User not found"
+// @Failure 500 {object} AuthResponse "Internal server error"
+// @Router /api/v1/auth/forgot-password [post]
 func (h *AuthHandler) ForgotPassword(c *fiber.Ctx) error {
 	var req ForgotPasswordRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -413,7 +500,17 @@ type ResetPasswordRequest struct {
 }
 
 // ResetPassword handles password reset
-// POST /api/v1/auth/reset-password
+// @Summary Reset Password
+// @Description Resets user password using reset token from email
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param reset body ResetPasswordRequest true "Reset token and new password"
+// @Success 200 {object} AuthResponse "Password reset successfully"
+// @Failure 400 {object} AuthResponse "Invalid request or weak password"
+// @Failure 404 {object} AuthResponse "User not found or invalid token"
+// @Failure 500 {object} AuthResponse "Internal server error"
+// @Router /api/v1/auth/reset-password [post]
 func (h *AuthHandler) ResetPassword(c *fiber.Ctx) error {
 	var req ResetPasswordRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -460,7 +557,15 @@ func (h *AuthHandler) ResetPassword(c *fiber.Ctx) error {
 }
 
 // GetUserByID retrieves user information by ID
-// GET /api/v1/auth/users/:id
+// @Summary Get User By ID
+// @Description Retrieves user information by user ID
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param id path string true "User ID"
+// @Success 200 {object} AuthResponse "User information"
+// @Failure 404 {object} AuthResponse "User not found"
+// @Router /api/v1/auth/users/{id} [get]
 func (h *AuthHandler) GetUserByID(c *fiber.Ctx) error {
 	userID := c.Params("id")
 
@@ -528,18 +633,21 @@ func getPointerValue(p *string) string {
 	return *p
 }
 
-// Helper function to format timestamps
-func formatTime(t *string) *string {
-	return t
-}
-
 // CheckEmailExistsRequest represents a check email request
 type CheckEmailRequest struct {
 	Email string `json:"email"`
 }
 
 // CheckEmailExists checks if an email is already registered
-// GET /api/v1/auth/check-email
+// @Summary Check Email Exists
+// @Description Checks if an email address is already registered in the system
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param email query string true "Email address to check"
+// @Success 200 {object} map[string]interface{} "Email availability status"
+// @Failure 400 {object} map[string]interface{} "Invalid email"
+// @Router /api/v1/auth/check-email [get]
 func (h *AuthHandler) CheckEmailExists(c *fiber.Ctx) error {
 	email := c.Query("email")
 
@@ -573,7 +681,16 @@ type CredentialsValidateRequest struct {
 
 // ValidateCredentials validates credentials and returns user data for NextAuth
 // This is specifically designed for NextAuth custom provider integration
-// POST /api/v1/auth/validate
+// @Summary Validate Credentials
+// @Description Validates user credentials without creating a session
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param credentials body CredentialsValidateRequest true "Credentials to validate"
+// @Success 200 {object} map[string]interface{} "Credentials are valid"
+// @Failure 400 {object} map[string]interface{} "Invalid request"
+// @Failure 401 {object} map[string]interface{} "Invalid credentials"
+// @Router /api/v1/auth/validate [post]
 func (h *AuthHandler) ValidateCredentials(c *fiber.Ctx) error {
 	var req CredentialsValidateRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -651,7 +768,17 @@ type MagicLinkRequest struct {
 }
 
 // RequestMagicLink sends a magic link to the user's email
-// POST /api/v1/auth/magic-link
+// @Summary Request Magic Link
+// @Description Sends a passwordless authentication magic link to user's email
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param magicLink body MagicLinkRequest true "User email"
+// @Success 200 {object} AuthResponse "Magic link sent"
+// @Failure 400 {object} AuthResponse "Invalid email"
+// @Failure 404 {object} AuthResponse "User not found"
+// @Failure 500 {object} AuthResponse "Internal server error"
+// @Router /api/v1/auth/magic-link [post]
 func (h *AuthHandler) RequestMagicLink(c *fiber.Ctx) error {
 	var req MagicLinkRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -718,7 +845,17 @@ type MagicLinkVerifyRequest struct {
 }
 
 // VerifyMagicLink verifies a magic link token
-// POST /api/v1/auth/magic-link/verify
+// @Summary Verify Magic Link
+// @Description Verifies magic link token and authenticates user
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param verify body MagicLinkVerifyRequest true "Magic link token"
+// @Success 200 {object} AuthResponse "Authentication successful with JWT tokens"
+// @Failure 400 {object} AuthResponse "Invalid request"
+// @Failure 401 {object} AuthResponse "Invalid or expired token"
+// @Failure 500 {object} AuthResponse "Internal server error"
+// @Router /api/v1/auth/magic-link/verify [post]
 func (h *AuthHandler) VerifyMagicLink(c *fiber.Ctx) error {
 	var req MagicLinkVerifyRequest
 	if err := c.BodyParser(&req); err != nil {

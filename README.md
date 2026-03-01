@@ -4,19 +4,16 @@ REST API and background job processing service for NodeByte infrastructure manag
 
 [![Go Version](https://img.shields.io/badge/go-1.24-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-AGPL%203.0-green.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](Dockerfile)
-[![Tests](https://github.com/NodeByteHosting/nodebyte-host/actions/workflows/test-build.yml/badge.svg)](https://github.com/NodeByteHosting/nodebyte-host/actions)
-[![Lint](https://github.com/NodeByteHosting/nodebyte-host/actions/workflows/lint.yml/badge.svg)](https://github.com/NodeByteHosting/nodebyte-host/actions)
-[![Coverage](https://codecov.io/gh/NodeByteHosting/nodebyte-host/branch/master/graph/badge.svg)](https://codecov.io/gh/NodeByteHosting/nodebyte-host)
 
 ## Overview
 
 The NodeByte Backend API provides a comprehensive REST API for managing game server infrastructure, with enterprise-grade features:
 
 - **Hytale OAuth 2.0 Authentication** - Device code flow, token management, game session handling with JWT validation
-- **Panel Synchronization** - Full Pterodactyl panel sync (locations, nodes, allocations, nests, eggs, servers, users, databases)
+- **Panel Synchronization** - Full Pterodactyl panel sync with stale record cleanup (locations, nodes, allocations, nests, eggs, servers, users, databases)
 - **Job Queue System** - Redis-backed async job processing with priority queues (Asynq)
 - **Admin Dashboard** - Complete REST API for system settings, webhooks, and sync management
+- **User Dashboard** - Account profile management, email verification, email change requests
 - **Email Queue** - Asynchronous email sending via Resend API
 - **Discord Webhooks** - Real-time notifications for sync events and system changes
 - **Cron Scheduler** - Automated scheduled sync jobs with configurable intervals
@@ -497,6 +494,51 @@ GET /api/v1/stats/users
 GET /api/admin/stats
 ```
 
+### Dashboard Endpoints (Bearer Token Required)
+
+#### Get User Account Profile
+```http
+GET /api/v1/dashboard/account
+Authorization: Bearer your-jwt-token
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "user-uuid",
+    "firstName": "John",
+    "lastName": "Doe",
+    "username": "johndoe",
+    "email": "john@example.com",
+    "emailVerified": true,
+    "phoneNumber": "+1 555-0000",
+    "companyName": "Acme Inc.",
+    "billingEmail": "billing@acme.com",
+    "lastLoginAt": "2026-02-28T12:00:00Z",
+    "roles": ["user"]
+  }
+}
+```
+
+#### Resend Verification Email
+```http
+POST /api/v1/dashboard/account/resend-verification
+Authorization: Bearer your-jwt-token
+```
+
+#### Request Email Change
+```http
+POST /api/v1/dashboard/account/change-email
+Content-Type: application/json
+Authorization: Bearer your-jwt-token
+
+{
+  "newEmail": "newemail@example.com"
+}
+```
+
 ## Integration Examples
 
 ### Next.js Integration
@@ -706,6 +748,142 @@ docker-compose logs -f backend
 - Structured logging with contextual information
 - Tests for business logic and API handlers
 - Code must pass: `gofmt`, `go vet`, `golangci-lint`
+
+# Database Tools - Quick Reference
+
+## One-Time Setup
+
+```bash
+cd backend
+make build-tools
+```
+
+## Common Commands
+
+### Fresh Database
+```bash
+make db-init
+```
+
+### Add New Schemas (Interactive)
+```bash
+make db-migrate
+# Then select schema numbers from menu (e.g., 14,15)
+```
+
+### Single Schema
+```bash
+make db-migrate-schema SCHEMA=schema_15_careers.sql
+```
+
+### Start Fresh
+```bash
+make db-reset
+# Confirm by typing database name
+```
+
+### See Available Schemas
+```bash
+make db-list
+```
+
+## With Environment Variable
+
+```bash
+export DATABASE_URL="postgresql://user:password@localhost:5432/nodebyte"
+
+# Then use commands normally
+make db-init
+make db-migrate
+make db-reset
+```
+
+## Direct Binary Usage
+
+```bash
+# All commands also work with the binary directly
+./bin/db init -database "postgresql://user:password@localhost:5432/nodebyte"
+./bin/db migrate -database "postgresql://user:password@localhost:5432/nodebyte"
+./bin/db migrate -database "..." -schema schema_15_careers.sql
+./bin/db reset -database "postgresql://user:password@localhost:5432/nodebyte"
+./bin/db list
+./bin/db help
+```
+
+## Development Workflow
+
+```bash
+# Start fresh
+make db-reset
+# Confirm: nodebyte
+# ✅ Database is now reset and initialized
+
+# Make changes, run tests
+# ...
+
+# Add new schema during development
+make db-migrate-schema SCHEMA=schema_16_new_feature.sql
+
+# Or choose from menu
+make db-migrate
+```
+
+## Makefile Targets
+
+```
+db-init               # Initialize fresh database
+db-migrate            # Interactive schema selection
+db-migrate-schema     # Migrate specific schema (SCHEMA=name)
+db-reset              # Drop and recreate database
+db-list               # List available schemas
+build-tools           # Build database tool
+```
+
+## Common Issues
+
+**Tool not found?**
+```bash
+make build-tools
+```
+
+**Wrong database connected?**
+```bash
+export DATABASE_URL="postgresql://user:password@correct-host/correct-db"
+make db-migrate
+```
+
+**Need to start over?**
+```bash
+make db-reset
+# Type database name to confirm
+# Database is now fresh with all 15 schemas
+```
+
+## Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | (none) |
+| `SCHEMA` | Used with `db-migrate-schema` | (none) |
+
+## More Information
+
+- **Full Guide**: See `DATABASE_TOOLS.md`
+- **Implementation**: See `DATABASE_IMPLEMENTATION.md`
+- **Schema Details**: See `schemas/README.md`
+
+---
+
+**Quick Test:**
+```bash
+make build-tools && make db-list
+```
+
+**Help:**
+```bash
+make help
+./bin/db help
+```
 
 ### Pre-Commit Checks
 

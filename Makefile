@@ -1,12 +1,46 @@
 # NodeByte Backend Makefile
 # Usage: make [target]
 
+# Load environment variables from .env file
+ifneq (,$(wildcard .env))
+	include .env
+endif
+
 # Variables
 BINARY_NAME=nodebyte-backend
 MAIN_PATH=./cmd/api
 BUILD_DIR=./bin
-GO=go
-GOFLAGS=-ldflags="-s -w"
+GO?=go
+
+ifeq ($(OS),Windows_NT)
+	GOFLAGS=-ldflags "-s -w"
+	EXE_EXT=.exe
+	BINARY_PATH=$(BUILD_DIR)/$(BINARY_NAME)$(EXE_EXT)
+	DB_TOOL_PATH=$(BUILD_DIR)/db$(EXE_EXT)
+	MKDIR_BUILD=if not exist "$(BUILD_DIR)" mkdir "$(BUILD_DIR)"
+	RM_BUILD=if exist "$(BUILD_DIR)" rmdir /s /q "$(BUILD_DIR)"
+	RM_TMP=if exist "tmp" rmdir /s /q "tmp"
+	RM_COVERAGE_OUT=if exist "coverage.out" del /q "coverage.out"
+	RM_COVERAGE_HTML=if exist "coverage.html" del /q "coverage.html"
+	RUN_GOOS_LINUX_AMD64=set GOOS=linux&& set GOARCH=amd64&& $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(MAIN_PATH)
+	RUN_GOOS_WINDOWS_AMD64=set GOOS=windows&& set GOARCH=amd64&& $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(MAIN_PATH)
+	RUN_GOOS_DARWIN_AMD64=set GOOS=darwin&& set GOARCH=amd64&& $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(MAIN_PATH)
+	RUN_GOOS_DARWIN_ARM64=set GOOS=darwin&& set GOARCH=arm64&& $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(MAIN_PATH)
+else
+	GOFLAGS=-ldflags="-s -w"
+	EXE_EXT=
+	BINARY_PATH=$(BUILD_DIR)/$(BINARY_NAME)$(EXE_EXT)
+	DB_TOOL_PATH=$(BUILD_DIR)/db$(EXE_EXT)
+	MKDIR_BUILD=mkdir -p $(BUILD_DIR)
+	RM_BUILD=rm -rf $(BUILD_DIR)
+	RM_TMP=rm -rf tmp
+	RM_COVERAGE_OUT=rm -f coverage.out
+	RM_COVERAGE_HTML=rm -f coverage.html
+	RUN_GOOS_LINUX_AMD64=GOOS=linux GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(MAIN_PATH)
+	RUN_GOOS_WINDOWS_AMD64=GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(MAIN_PATH)
+	RUN_GOOS_DARWIN_AMD64=GOOS=darwin GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(MAIN_PATH)
+	RUN_GOOS_DARWIN_ARM64=GOOS=darwin GOARCH=arm64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(MAIN_PATH)
+endif
 
 # Docker
 DOCKER_IMAGE=nodebyte/backend
@@ -18,7 +52,7 @@ YELLOW=
 RED=
 NC=
 
-.PHONY: all build run dev clean test lint fmt vet deps tidy docker-build docker-up docker-down docker-logs swagger help
+.PHONY: all build build-tools run dev clean test lint fmt vet deps tidy docker-build docker-up docker-down docker-logs swagger help db-init db-migrate db-reset db-list
 
 # Default target
 all: build
@@ -28,26 +62,33 @@ all: build
 # Build the application for current platform
 build:
 	@echo "Building $(BINARY_NAME)..."
-	@if not exist "$(BUILD_DIR)" mkdir "$(BUILD_DIR)"
-	$(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
-	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
+	@$(MKDIR_BUILD)
+	$(GO) build $(GOFLAGS) -o $(BINARY_PATH) $(MAIN_PATH)
+	@echo "Build complete: $(BINARY_PATH)"
 
 # Build for multiple platforms
 build-all:
 	@echo "Building for all platforms..."
-	@if not exist "$(BUILD_DIR)" mkdir "$(BUILD_DIR)"
-	GOOS=linux GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(MAIN_PATH)
-	GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(MAIN_PATH)
-	GOOS=darwin GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(MAIN_PATH)
-	GOOS=darwin GOARCH=arm64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(MAIN_PATH)
+	@$(MKDIR_BUILD)
+	$(RUN_GOOS_LINUX_AMD64)
+	$(RUN_GOOS_WINDOWS_AMD64)
+	$(RUN_GOOS_DARWIN_AMD64)
+	$(RUN_GOOS_DARWIN_ARM64)
 	@echo "All builds complete"
+
+# Build database tools
+build-tools:
+	@echo "Building database tools..."
+	@$(MKDIR_BUILD)
+	$(GO) build $(GOFLAGS) -o $(DB_TOOL_PATH) ./cmd/db
+	@echo "Database tools built: $(DB_TOOL_PATH)"
 
 ## Run Commands
 
 # Run the application
 run: build
 	@echo "Running $(BINARY_NAME)..."
-	$(BUILD_DIR)\$(BINARY_NAME)
+	$(BINARY_PATH)
 
 # Run with hot reload (requires air)
 dev:
@@ -169,6 +210,34 @@ docker-clean:
 
 ## Database Commands
 
+# Build database migration tools
+build-db-tools: build-tools
+
+# Initialize fresh database with all schemas
+db-init: build-tools
+	@echo "Initializing database..."
+	$(DB_TOOL_PATH) init -database "$(DATABASE_URL)"
+
+# Run interactive migration
+db-migrate: build-tools
+	@echo "Running database migration..."
+	$(DB_TOOL_PATH) migrate -database "$(DATABASE_URL)"
+
+# Migrate specific schema
+db-migrate-schema: build-tools
+	@$(if $(SCHEMA),,$(error Usage: make db-migrate-schema SCHEMA=schema_name.sql))
+	@echo "Migrating $(SCHEMA)..."
+	$(DB_TOOL_PATH) migrate -database "$(DATABASE_URL)" -schema "$(SCHEMA)"
+
+# Reset database (DROP and recreate) - CAREFUL!
+db-reset: build-tools
+	@echo "WARNING: This will DROP and recreate the database!"
+	$(DB_TOOL_PATH) reset -database "$(DATABASE_URL)"
+
+# List available schemas
+db-list: build-tools
+	$(DB_TOOL_PATH) list
+
 # Generate sqlc code (if using sqlc)
 sqlc:
 	@echo "Generating sqlc code..."
@@ -179,18 +248,19 @@ sqlc:
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	rmdir /s /q $(BUILD_DIR) 2>nul || true
-	rmdir /s /q tmp 2>nul || true
-	del coverage.out coverage.html 2>nul || true
+	@$(RM_BUILD)
+	@$(RM_TMP)
+	@$(RM_COVERAGE_OUT)
+	@$(RM_COVERAGE_HTML)
 	@echo "Clean complete"
 
 # Show environment info
 info:
 	@echo "Environment Info"
-	@echo "Go Version: " && go version
-	@echo "GOOS: " && go env GOOS
-	@echo "GOARCH: " && go env GOARCH
-	@echo "Module: " && go list -m
+	@echo "Go Version: " && $(GO) version
+	@echo "GOOS: " && $(GO) env GOOS
+	@echo "GOARCH: " && $(GO) env GOARCH
+	@echo "Module: " && $(GO) list -m
 
 # Generate API documentation (if using swag)
 docs:
@@ -207,6 +277,7 @@ help:
 	@echo "Build:"
 	@echo "  make build          - Build the application"
 	@echo "  make build-all      - Build for all platforms"
+	@echo "  make build-tools    - Build database tools"
 	@echo ""
 	@echo "Run:"
 	@echo "  make run            - Build and run"
@@ -221,6 +292,13 @@ help:
 	@echo "  make fmt            - Format code"
 	@echo "  make vet            - Run go vet"
 	@echo "  make check          - Run all checks"
+	@echo ""
+	@echo "Database:"
+	@echo "  make db-init        - Initialize fresh database"
+	@echo "  make db-migrate     - Run interactive migration"
+	@echo "  make db-migrate-schema SCHEMA=schema_name.sql - Migrate specific schema"
+	@echo "  make db-reset       - Reset database (DROP and recreate)"
+	@echo "  make db-list        - List available schemas"
 	@echo ""
 	@echo "Dependencies:"
 	@echo "  make deps           - Download dependencies"

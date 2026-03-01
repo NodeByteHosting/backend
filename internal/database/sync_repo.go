@@ -65,22 +65,22 @@ func (r *SyncRepository) UpdateSyncLog(ctx context.Context, syncLogID, status st
 	args := []interface{}{syncLogID, status}
 
 	if itemsTotal != nil {
-		query += `, "itemsTotal" = $` + string(rune(len(args)+1))
+		query += `, "itemsTotal" = $` + strconv.Itoa(len(args)+1)
 		args = append(args, *itemsTotal)
 	}
 
 	if itemsSynced != nil {
-		query += `, "itemsSynced" = $` + string(rune(len(args)+1))
+		query += `, "itemsSynced" = $` + strconv.Itoa(len(args)+1)
 		args = append(args, *itemsSynced)
 	}
 
 	if itemsFailed != nil {
-		query += `, "itemsFailed" = $` + string(rune(len(args)+1))
+		query += `, "itemsFailed" = $` + strconv.Itoa(len(args)+1)
 		args = append(args, *itemsFailed)
 	}
 
 	if len(metadataJSON) > 0 {
-		query += `, metadata = $` + string(rune(len(args)+1))
+		query += `, metadata = $` + strconv.Itoa(len(args)+1)
 		args = append(args, string(metadataJSON))
 	}
 
