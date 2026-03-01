@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/lib/pq"
 	"github.com/nodebyte/backend/internal/database"
 )
 
@@ -28,6 +27,7 @@ type AdminUserResponse struct {
 	Username           string   `json:"username"`
 	FirstName          string   `json:"firstName"`
 	LastName           string   `json:"lastName"`
+	PterodactylID      *int     `json:"pterodactylId"`
 	Roles              []string `json:"roles"`
 	IsPterodactylAdmin bool     `json:"isPterodactylAdmin"`
 	IsVirtfusionAdmin  bool     `json:"isVirtfusionAdmin"`
@@ -95,7 +95,7 @@ func (h *AdminUserHandler) GetUsers(c *fiber.Ctx) error {
 	// Build main query using subqueries for counts
 	query := `
 		SELECT 
-			u.id, u.email, u.username,
+			u.id, u.email, u.username, u."pterodactylId",
 			u.roles, u."isPterodactylAdmin", u."isVirtfusionAdmin", 
 			u."isSystemAdmin", u."isMigrated", u."isActive", u."emailVerified",
 			u."createdAt", u."updatedAt", u."lastLoginAt",
@@ -154,7 +154,7 @@ func (h *AdminUserHandler) GetUsers(c *fiber.Ctx) error {
 	users := []AdminUserResponse{}
 	for rows.Next() {
 		var user AdminUserResponse
-		var rolesArray pq.StringArray
+		var rolesArray []string
 		var lastLoginAt *time.Time
 		var emailVerifiedTime *time.Time
 		var createdAt time.Time
@@ -164,6 +164,7 @@ func (h *AdminUserHandler) GetUsers(c *fiber.Ctx) error {
 			&user.ID,
 			&user.Email,
 			&user.Username,
+			&user.PterodactylID,
 			&rolesArray,
 			&user.IsPterodactylAdmin,
 			&user.IsVirtfusionAdmin,
@@ -183,7 +184,7 @@ func (h *AdminUserHandler) GetUsers(c *fiber.Ctx) error {
 		}
 
 		// Parse roles array
-		user.Roles = []string(rolesArray)
+		user.Roles = rolesArray
 		if user.Roles == nil {
 			user.Roles = []string{}
 		}
@@ -209,14 +210,13 @@ func (h *AdminUserHandler) GetUsers(c *fiber.Ctx) error {
 	totalPages := (totalCount + req.PageSize - 1) / req.PageSize
 
 	return c.JSON(fiber.Map{
-		"data": fiber.Map{
-			"users": users,
-			"pagination": fiber.Map{
-				"page":       req.Page,
-				"pageSize":   req.PageSize,
-				"total":      totalCount,
-				"totalPages": totalPages,
-			},
+		"success": true,
+		"users":   users,
+		"pagination": fiber.Map{
+			"page":       req.Page,
+			"pageSize":   req.PageSize,
+			"total":      totalCount,
+			"totalPages": totalPages,
 		},
 	})
 }
@@ -242,14 +242,15 @@ func (h *AdminUserHandler) UpdateUserRoles(c *fiber.Ctx) error {
 		})
 	}
 
-	// Validate roles
+	// Validate roles — must match the defined Role enum
 	validRoles := map[string]bool{
-		"admin":             true,
-		"moderator":         true,
-		"supporter":         true,
-		"pterodactyl_admin": true,
-		"virtfusion_admin":  true,
-		"system_admin":      true,
+		"MEMBER":        true,
+		"PARTNER":       true,
+		"SPONSOR":       true,
+		"TECH_TEAM":     true,
+		"SUPPORT_TEAM":  true,
+		"ADMINISTRATOR": true,
+		"SUPER_ADMIN":   true,
 	}
 
 	for _, role := range req.Roles {
@@ -260,13 +261,20 @@ func (h *AdminUserHandler) UpdateUserRoles(c *fiber.Ctx) error {
 		}
 	}
 
-	// Update user roles in database
-	roleStr := strings.Join(req.Roles, ",")
-	err := h.db.Pool.QueryRow(context.Background(),
-		`UPDATE users SET roles = $1, updated_at = NOW() WHERE id = $2 RETURNING id, roles`,
-		roleStr, req.UserID,
-	).Scan(nil, nil)
+	// Sync isSystemAdmin: true when SUPER_ADMIN is in the roles list
+	isSuperAdmin := false
+	for _, r := range req.Roles {
+		if r == "SUPER_ADMIN" {
+			isSuperAdmin = true
+			break
+		}
+	}
 
+	// Update user roles and keep isSystemAdmin in sync
+	_, err := h.db.Pool.Exec(context.Background(),
+		`UPDATE users SET roles = $1, "isSystemAdmin" = $2, "updatedAt" = NOW() WHERE id = $3`,
+		req.Roles, isSuperAdmin, req.UserID,
+	)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to update user roles",
@@ -275,8 +283,9 @@ func (h *AdminUserHandler) UpdateUserRoles(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"data": fiber.Map{
-			"userId": req.UserID,
-			"roles":  req.Roles,
+			"userId":        req.UserID,
+			"roles":         req.Roles,
+			"isSystemAdmin": isSuperAdmin,
 		},
 	})
 }

@@ -21,6 +21,309 @@
     "host": "core.nodebyte.host",
     "basePath": "/",
     "paths": {
+        "/api/admin/allocations": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Returns paginated allocations across all nodes with filtering by assignment status, node, and IP/alias search",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin Nodes"
+                ],
+                "summary": "List all allocations",
+                "parameters": [
+                    {
+                        "enum": [
+                            "all",
+                            "yes",
+                            "no"
+                        ],
+                        "type": "string",
+                        "default": "all",
+                        "description": "Filter by assignment status",
+                        "name": "assigned",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by node ID",
+                        "name": "nodeId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search by IP, alias, or port",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Items per page",
+                        "name": "pageSize",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Allocations list with pagination",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/locations": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Returns all Pterodactyl panel locations with their node counts",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin Nodes"
+                ],
+                "summary": "List all locations",
+                "responses": {
+                    "200": {
+                        "description": "Locations list",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/nodes": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Returns a paginated list of all server nodes with location info, server counts, and allocation counts",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin Nodes"
+                ],
+                "summary": "List all nodes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search by name or FQDN",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "all",
+                            "yes",
+                            "no"
+                        ],
+                        "type": "string",
+                        "default": "all",
+                        "description": "Filter by maintenance mode",
+                        "name": "maintenance",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 25,
+                        "description": "Items per page",
+                        "name": "pageSize",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Nodes list with pagination",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/nodes/{id}/allocations": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Returns paginated allocations for a specific node with optional assigned filter",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin Nodes"
+                ],
+                "summary": "Get node allocations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Node ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "all",
+                            "yes",
+                            "no"
+                        ],
+                        "type": "string",
+                        "default": "all",
+                        "description": "Filter by assignment status",
+                        "name": "assigned",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Items per page",
+                        "name": "pageSize",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Allocations list with pagination",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/nodes/{id}/maintenance": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Toggles the maintenance mode flag on a specific node",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin Nodes"
+                ],
+                "summary": "Toggle node maintenance mode",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Node ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Maintenance mode toggled",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
         "/api/admin/settings": {
             "get": {
                 "security": [
@@ -1011,6 +1314,35 @@
                 }
             }
         },
+        "/api/admin/sync/stream/{id}": {
+            "get": {
+                "description": "Streams live sync log updates as Server-Sent Events until the sync reaches a terminal state",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Stream sync progress (SSE)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Sync log ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Bearer JWT token",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
         "/api/panel/counts": {
             "get": {
                 "description": "Retrieves counts of all manageable resources for the panel (no authentication required)",
@@ -1789,6 +2121,69 @@
                 }
             }
         },
+        "/api/v1/dashboard/account/change-email": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Changes the user's email address. Requires current password for verification. Clears email verification status and sends a verification email to the new address.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Request email change",
+                "parameters": [
+                    {
+                        "description": "Email change request",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Email updated",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing required fields",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized or wrong password",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Email already in use",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/dashboard/account/password": {
             "put": {
                 "security": [
@@ -1833,6 +2228,49 @@
                     },
                     "401": {
                         "description": "Unauthorized or wrong password",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/dashboard/account/resend-verification": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Resends the email verification email for the authenticated user. Fails if email is already verified.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Resend verification email",
+                "responses": {
+                    "200": {
+                        "description": "Verification email sent",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Email already verified",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3543,6 +3981,12 @@
         "handlers.UpdateUserAccountRequest": {
             "type": "object",
             "properties": {
+                "billingEmail": {
+                    "type": "string"
+                },
+                "companyName": {
+                    "type": "string"
+                },
                 "email": {
                     "type": "string"
                 },
@@ -3550,6 +3994,9 @@
                     "type": "string"
                 },
                 "lastName": {
+                    "type": "string"
+                },
+                "phoneNumber": {
                     "type": "string"
                 },
                 "username": {

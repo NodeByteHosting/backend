@@ -911,13 +911,11 @@ func (h *AdminSyncHandler) GetSyncLogs(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.JSON(SuccessResponse{
-		Success: true,
-		Data: fiber.Map{
-			"logs":   logs,
-			"limit":  limit,
-			"offset": offset,
-		},
+	return c.JSON(fiber.Map{
+		"success": true,
+		"logs":    logs,
+		"limit":   limit,
+		"offset":  offset,
 	})
 }
 
@@ -967,27 +965,25 @@ func (h *AdminSyncHandler) GetSyncStatusAdmin(c *fiber.Ctx) error {
 	h.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM egg_variables").Scan(&totalEggVariables)
 	h.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM server_databases").Scan(&totalServerDatabases)
 
-	return c.JSON(SuccessResponse{
-		Success: true,
-		Data: fiber.Map{
-			"status": fiber.Map{
-				"lastSync":  latestSync,
-				"isSyncing": false,
-			},
-			"counts": fiber.Map{
-				"users":           totalUsers,
-				"migratedUsers":   migratedUsers,
-				"servers":         totalServers,
-				"nodes":           totalNodes,
-				"locations":       totalLocations,
-				"allocations":     totalAllocations,
-				"nests":           totalNests,
-				"eggs":            totalEggs,
-				"eggVariables":    totalEggVariables,
-				"serverDatabases": totalServerDatabases,
-			},
-			"availableTargets": []string{"full", "locations", "nodes", "servers", "users"},
+	return c.JSON(fiber.Map{
+		"success": true,
+		"status": fiber.Map{
+			"lastSync":  latestSync,
+			"isSyncing": false,
 		},
+		"counts": fiber.Map{
+			"users":           totalUsers,
+			"migratedUsers":   migratedUsers,
+			"servers":         totalServers,
+			"nodes":           totalNodes,
+			"locations":       totalLocations,
+			"allocations":     totalAllocations,
+			"nests":           totalNests,
+			"eggs":            totalEggs,
+			"eggVariables":    totalEggVariables,
+			"serverDatabases": totalServerDatabases,
+		},
+		"availableTargets": []string{"full", "locations", "nodes", "servers", "users"},
 	})
 }
 
@@ -1022,17 +1018,20 @@ func (h *AdminSyncHandler) TriggerSyncAdmin(c *fiber.Ctx) error {
 
 	// Validate and map sync type
 	validTypes := map[string]bool{
-		"full":      true,
-		"locations": true,
-		"nodes":     true,
-		"servers":   true,
-		"users":     true,
+		"full":        true,
+		"locations":   true,
+		"nodes":       true,
+		"allocations": true,
+		"nests":       true,
+		"servers":     true,
+		"databases":   true,
+		"users":       true,
 	}
 
 	if !validTypes[syncType] {
 		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
 			Success: false,
-			Error:   "Invalid sync type. Valid types: full, locations, nodes, servers, users",
+			Error:   "Invalid sync type. Valid types: full, locations, nodes, allocations, nests, servers, databases, users",
 		})
 	}
 
@@ -1061,9 +1060,18 @@ func (h *AdminSyncHandler) TriggerSyncAdmin(c *fiber.Ctx) error {
 	case "nodes":
 		payload := queue.SyncPayload{SyncLogID: syncLog.ID}
 		taskInfo, err = h.queueManager.EnqueueSyncNodes(payload)
+	case "allocations":
+		payload := queue.SyncPayload{SyncLogID: syncLog.ID}
+		taskInfo, err = h.queueManager.EnqueueSyncAllocations(payload)
+	case "nests":
+		payload := queue.SyncPayload{SyncLogID: syncLog.ID}
+		taskInfo, err = h.queueManager.EnqueueSyncNests(payload)
 	case "servers":
 		payload := queue.SyncPayload{SyncLogID: syncLog.ID}
 		taskInfo, err = h.queueManager.EnqueueSyncServers(payload)
+	case "databases":
+		payload := queue.SyncPayload{SyncLogID: syncLog.ID}
+		taskInfo, err = h.queueManager.EnqueueSyncDatabases(payload)
 	case "users":
 		payload := queue.SyncPayload{SyncLogID: syncLog.ID}
 		taskInfo, err = h.queueManager.EnqueueSyncUsers(payload)
@@ -1079,14 +1087,12 @@ func (h *AdminSyncHandler) TriggerSyncAdmin(c *fiber.Ctx) error {
 
 	log.Info().Str("sync_log_id", syncLog.ID).Str("type", syncType).Str("task_id", taskInfo.ID).Msg("Sync enqueued from admin")
 
-	return c.Status(fiber.StatusAccepted).JSON(SuccessResponse{
-		Success: true,
-		Data: fiber.Map{
-			"sync_log_id": syncLog.ID,
-			"task_id":     taskInfo.ID,
-			"status":      "PENDING",
-		},
-		Message: "Sync has been queued",
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		"success":     true,
+		"sync_log_id": syncLog.ID,
+		"task_id":     taskInfo.ID,
+		"status":      "PENDING",
+		"message":     "Sync has been queued",
 	})
 }
 
@@ -1132,12 +1138,10 @@ func (h *AdminSyncHandler) CancelSyncAdmin(c *fiber.Ctx) error {
 
 	log.Info().Str("sync_log_id", latestLog.ID).Msg("Sync cancellation requested by admin")
 
-	return c.JSON(SuccessResponse{
-		Success: true,
-		Data: fiber.Map{
-			"sync_log_id": latestLog.ID,
-		},
-		Message: "Sync cancellation requested",
+	return c.JSON(fiber.Map{
+		"success":     true,
+		"sync_log_id": latestLog.ID,
+		"message":     "Sync cancellation requested",
 	})
 }
 

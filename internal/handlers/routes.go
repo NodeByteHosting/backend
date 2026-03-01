@@ -74,6 +74,14 @@ func SetupRoutes(app *fiber.App, db *database.DB, queueManager *queue.Manager, a
 	app.Post("/api/v1/hytale/server-logs", hytaleServerLogsHandler.CreateServerLogs)
 	app.Get("/api/v1/hytale/server-logs/count", hytaleServerLogsHandler.GetHytaleServerLogsCount)
 
+	// SSE sync stream — MUST be registered before adminGroup is created.
+	// app.Group("/api/admin", mw) registers mw as a prefix-level Use() handler that
+	// intercepts ALL /api/admin/* requests, including those registered on app directly.
+	// Auth is handled inside the handler via ?token= query param (EventSource cannot
+	// send custom headers).
+	syncStreamHandler := NewSyncStreamHandler(db)
+	app.Get("/api/admin/sync/stream/:id", syncStreamHandler.StreamSyncProgress)
+
 	// Admin settings routes (require bearer token auth) - MUST BE BEFORE /api group
 	bearerAuth := NewBearerAuthMiddleware(db)
 	adminGroup := app.Group("/api/admin", bearerAuth.Handler())
@@ -108,6 +116,19 @@ func SetupRoutes(app *fiber.App, db *database.DB, queueManager *queue.Manager, a
 	adminServerHandler := NewAdminServerHandler(db)
 	adminGroup.Get("/servers", adminServerHandler.GetServers)
 
+	// Admin node/location routes
+	nodeHandler := NewAdminNodeHandler(db)
+	adminGroup.Get("/nodes", nodeHandler.GetNodes)
+	adminGroup.Get("/nodes/:id/allocations", nodeHandler.GetNodeAllocations)
+	adminGroup.Patch("/nodes/:id/maintenance", nodeHandler.ToggleNodeMaintenance)
+	adminGroup.Get("/locations", nodeHandler.GetLocations)
+	adminGroup.Get("/allocations", nodeHandler.GetAllAllocations)
+
+	// Admin egg/nest routes
+	eggHandler := NewAdminEggHandler(db)
+	adminGroup.Get("/nests", eggHandler.GetNests)
+	adminGroup.Get("/eggs", eggHandler.GetEggs)
+
 	// Admin sync routes
 	adminSyncHandler := NewAdminSyncHandler(db, queueManager)
 	adminGroup.Get("/sync", adminSyncHandler.GetSyncStatusAdmin)
@@ -122,12 +143,14 @@ func SetupRoutes(app *fiber.App, db *database.DB, queueManager *queue.Manager, a
 
 	// Bearer-authenticated user routes (dashboard)
 	userRoutes := app.Group("/api/v1", bearerAuth.Handler())
-	dashboardHandler := NewDashboardHandler(db)
+	dashboardHandler := NewDashboardHandler(db, queueManager)
 	userRoutes.Get("/dashboard/stats", dashboardHandler.GetDashboardStats)
 	userRoutes.Get("/dashboard/servers", dashboardHandler.GetUserServers)
 	userRoutes.Get("/dashboard/account", dashboardHandler.GetUserAccount)
 	userRoutes.Put("/dashboard/account", dashboardHandler.UpdateUserAccount)
 	userRoutes.Put("/dashboard/account/password", dashboardHandler.ChangePassword)
+	userRoutes.Post("/dashboard/account/resend-verification", dashboardHandler.ResendVerificationEmail)
+	userRoutes.Post("/dashboard/account/change-email", dashboardHandler.RequestEmailChange)
 
 	// Protected routes (require API key or bearer token) - AFTER admin routes
 	protected := app.Group("/api", apiKeyMiddleware.Handler())

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.2] - unreleased
+## [0.3.0] - unreleased
 
 ### Added
 - **Unified Database CLI Tool** - Consolidated shell scripts into cross-platform Go CLI
@@ -40,6 +40,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Schema migration `schema_13_hytale_server_link.sql` adds `server_id` column to `hytale_game_sessions`
   - Graceful degradation: Logs warnings but continues if Pterodactyl push fails
 
+- **User Account API** - Full profile management endpoints for dashboard
+  - `GET /api/v1/dashboard/account` - Returns complete user profile (name, email, phone, company, billing email, roles, verification status, last login)
+  - `POST /api/v1/dashboard/account/resend-verification` - Resend email verification with queued email delivery
+  - `POST /api/v1/dashboard/account/change-email` - Request email address change with verification token
+  - Nullable field handling for optional user profile columns (`username`, `phoneNumber`, `companyName`, `billingEmail`)
+- **Stale Record Cleanup During Sync** - Automatic deletion of records no longer present on the panel
+  - Locations, nodes, allocations, nests, and servers are pruned after each sync step
+  - Allocations deletion batched across all nodes using collected IDs
+  - Server deletion scoped to `panelType = 'pterodactyl'` with non-null `pterodactylId` to avoid deleting manually-created records
+
 ### Fixed
 - **Admin Users Data Type Handling** - Fixed TIMESTAMP column scanning from PostgreSQL
   - Changed timestamp handling to use `time.Time` objects with RFC3339 formatting
@@ -51,6 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `syncServers()` now properly updates `server_id` foreign key in `allocations` table
   - Fixes issue where allocations were synced but not linked to their servers
   - All server-allocation relationships now properly populated during full sync
+- **Allocation Server ID Column Name** - Fixed snake_case vs camelCase mismatch in sync query
+  - Changed `server_id` to `"serverId"` in allocation UPDATE query to match actual DB column name
+  - Allocations now correctly display their associated server names in the admin panel
+- **User Account Nullable Username** - Fixed 500 error on `/api/v1/dashboard/account`
+  - Changed `Username` field from `string` to `*string` to handle nullable `username TEXT` column
+  - Prevents `pgx` scan failure when username is NULL
 
 ## [0.2.1] - 2026-01-14
 

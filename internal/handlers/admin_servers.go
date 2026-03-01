@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/nodebyte/backend/internal/database"
+	"github.com/rs/zerolog/log"
 )
 
 // AdminServerHandler handles admin server operations
@@ -21,19 +23,23 @@ func NewAdminServerHandler(db *database.DB) *AdminServerHandler {
 
 // AdminServerResponse represents a server for admin view
 type AdminServerResponse struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	Status      string     `json:"status"`
-	IsSuspended bool       `json:"isSuspended"`
-	Owner       *OwnerInfo `json:"owner"`
-	Node        *NodeInfo  `json:"node"`
-	Egg         *EggInfo   `json:"egg"`
-	Memory      int64      `json:"memory"`
-	Disk        int64      `json:"disk"`
-	CPU         int        `json:"cpu"`
-	CreatedAt   string     `json:"createdAt"`
-	UpdatedAt   string     `json:"updatedAt"`
+	ID            string     `json:"id"`
+	ServerType    string     `json:"serverType"`
+	PterodactylID int        `json:"pterodactylId"`
+	UUID          string     `json:"uuid"`
+	Name          string     `json:"name"`
+	Description   string     `json:"description"`
+	Status        string     `json:"status"`
+	IsSuspended   bool       `json:"isSuspended"`
+	PanelType     string     `json:"panelType"`
+	Owner         *OwnerInfo `json:"owner"`
+	Node          *NodeInfo  `json:"node"`
+	Egg           *EggInfo   `json:"egg"`
+	Memory        int        `json:"memory"`
+	Disk          int        `json:"disk"`
+	CPU           int        `json:"cpu"`
+	CreatedAt     string     `json:"createdAt"`
+	UpdatedAt     string     `json:"updatedAt"`
 }
 
 // OwnerInfo represents server owner information
@@ -59,24 +65,26 @@ type EggInfo struct {
 
 // GetServersRequest represents pagination and filter parameters
 type GetServersRequest struct {
-	Search   string `query:"search"`
-	Status   string `query:"status"` // all, online, offline, suspended, installing
-	Sort     string `query:"sort"`   // name, created, status
-	Order    string `query:"order"`  // asc, desc
-	Page     int    `query:"page"`
-	PageSize int    `query:"pageSize"`
+	Search     string `query:"search"`
+	Status     string `query:"status"`     // all, online, offline, suspended, installing
+	ServerType string `query:"serverType"` // all, game_server, vps, email, web_hosting
+	Sort       string `query:"sort"`       // name, created, status
+	Order      string `query:"order"`      // asc, desc
+	Page       int    `query:"page"`
+	PageSize   int    `query:"pageSize"`
 }
 
 // GetServers returns paginated list of all servers with filtering
 func (h *AdminServerHandler) GetServers(c *fiber.Ctx) error {
 	// Parse query parameters
 	req := GetServersRequest{
-		Search:   c.Query("search", ""),
-		Status:   c.Query("status", "all"),
-		Sort:     c.Query("sort", "created"),
-		Order:    c.Query("order", "desc"),
-		Page:     c.QueryInt("page", 1),
-		PageSize: c.QueryInt("pageSize", 25),
+		Search:     c.Query("search", ""),
+		Status:     c.Query("status", "all"),
+		ServerType: c.Query("serverType", "all"),
+		Sort:       c.Query("sort", "created"),
+		Order:      c.Query("order", "desc"),
+		Page:       c.QueryInt("page", 1),
+		PageSize:   c.QueryInt("pageSize", 25),
 	}
 
 	if req.Page < 1 {
@@ -86,48 +94,35 @@ func (h *AdminServerHandler) GetServers(c *fiber.Ctx) error {
 		req.PageSize = 25
 	}
 
-	// Build query
-	query := `
-		SELECT 
-			s.id, s.name, s.description, s.status, s.is_suspended,
-			u.id, u.email, u.username,
-			n.id, n.name, n.fqdn,
-			e.id, e.name, nest.name,
-			s.memory, s.disk, s.cpu, s.created_at, s.updated_at
-		FROM servers s
-		LEFT JOIN users u ON s.owner_id = u.id
-		LEFT JOIN nodes n ON s.node_id = n.id
-		LEFT JOIN eggs e ON s.egg_id = e.id
-		LEFT JOIN nests nest ON e.nest_id = nest.id
-		WHERE 1=1
-	`
-
+	whereClause := `WHERE 1=1`
 	args := []interface{}{}
 
 	// Apply search filter
 	if req.Search != "" {
 		args = append(args, "%"+req.Search+"%")
-		query += fmt.Sprintf(` AND (s.name ILIKE $%d OR s.description ILIKE $%d)`, len(args), len(args))
+		whereClause += fmt.Sprintf(` AND (s.name ILIKE $%d OR s.description ILIKE $%d)`, len(args), len(args))
 	}
 
-	// Apply status filter
+	// Apply status filter — match actual DB enum values
 	switch req.Status {
-	case "online":
-		args = append(args, "running")
-		query += fmt.Sprintf(` AND s.status = $%d AND s.is_suspended = false`, len(args))
+	case "online", "running":
+		whereClause += ` AND s.status = 'online' AND s."isSuspended" = false`
 	case "offline":
-		args = append(args, "stopped")
-		query += fmt.Sprintf(` AND s.status = $%d AND s.is_suspended = false`, len(args))
+		whereClause += ` AND s.status = 'offline' AND s."isSuspended" = false`
 	case "suspended":
-		query += ` AND s.is_suspended = true`
+		whereClause += ` AND s."isSuspended" = true`
 	case "installing":
-		args = append(args, "installing")
-		query += fmt.Sprintf(` AND s.status = $%d`, len(args))
-		// default: "all" - no additional filter
+		whereClause += ` AND s.status = 'installing'`
+	}
+
+	// Apply server type filter
+	if req.ServerType != "" && req.ServerType != "all" {
+		args = append(args, req.ServerType)
+		whereClause += fmt.Sprintf(` AND s."serverType" = $%d`, len(args))
 	}
 
 	// Apply sorting
-	sortField := "s.created_at"
+	sortField := `s."createdAt"`
 	if req.Sort == "name" {
 		sortField = "s.name"
 	} else if req.Sort == "status" {
@@ -137,54 +132,46 @@ func (h *AdminServerHandler) GetServers(c *fiber.Ctx) error {
 	if strings.ToLower(req.Order) == "asc" {
 		sortOrder = "ASC"
 	}
-	query += fmt.Sprintf(` ORDER BY %s %s`, sortField, sortOrder)
 
-	// Get total count for pagination
-	countQuery := `
-		SELECT COUNT(*)
-		FROM servers s
-		WHERE 1=1
-	`
-
-	// Apply same filters to count query
-	if req.Search != "" {
-		countQuery += ` AND (s.name ILIKE $1 OR s.description ILIKE $1)`
-	}
-
-	switch req.Status {
-	case "online":
-		countQuery += ` AND s.status = 'running' AND s.is_suspended = false`
-	case "offline":
-		countQuery += ` AND s.status = 'stopped' AND s.is_suspended = false`
-	case "suspended":
-		countQuery += ` AND s.is_suspended = true`
-	case "installing":
-		countQuery += ` AND s.status = 'installing'`
-	}
-
+	// Count
 	var totalCount int
-	countArgs := []interface{}{}
-	if req.Search != "" {
-		countArgs = append(countArgs, "%"+req.Search+"%")
-	}
-
-	err := h.db.Pool.QueryRow(context.Background(), countQuery, countArgs...).Scan(&totalCount)
-	if err != nil {
+	if err := h.db.Pool.QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM servers s `+whereClause,
+		args...,
+	).Scan(&totalCount); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to count servers",
+			"error": "Failed to count servers: " + err.Error(),
 		})
 	}
 
-	// Apply pagination
+	// Pagination args
 	offset := (req.Page - 1) * req.PageSize
 	args = append(args, req.PageSize, offset)
-	query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, len(args)-1, len(args))
+	limitPlaceholder := fmt.Sprintf("$%d", len(args)-1)
+	offsetPlaceholder := fmt.Sprintf("$%d", len(args))
 
-	// Execute query
+	query := `
+		SELECT
+			s.id, COALESCE(s."serverType", 'game_server'), s."pterodactylId", COALESCE(s.uuid, ''), s.name,
+			COALESCE(s.description, ''), s.status, s."isSuspended",
+			s.memory, s.disk, s.cpu, COALESCE(s."panelType", 'pterodactyl'),
+			s."createdAt", s."updatedAt",
+			u.id, u.email, u.username,
+			n.id, n.name, n.fqdn,
+			e.id, e.name, nest.name
+		FROM servers s
+		LEFT JOIN users u ON s."ownerId" = u.id
+		LEFT JOIN nodes n ON s."nodeId" = n.id
+		LEFT JOIN eggs e ON s."eggId" = e.id
+		LEFT JOIN nests nest ON e."nestId" = nest.id
+		` + whereClause + `
+		ORDER BY ` + sortField + ` ` + sortOrder + `
+		LIMIT ` + limitPlaceholder + ` OFFSET ` + offsetPlaceholder
+
 	rows, err := h.db.Pool.Query(context.Background(), query, args...)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to fetch servers",
+			"error": "Failed to fetch servers: " + err.Error(),
 		})
 	}
 	defer rows.Close()
@@ -192,79 +179,75 @@ func (h *AdminServerHandler) GetServers(c *fiber.Ctx) error {
 	servers := []AdminServerResponse{}
 	for rows.Next() {
 		var server AdminServerResponse
-		var ownerID, ownerEmail, ownerUsername interface{}
-		var nodeID interface{}
-		var nodeName, nodeFQDN interface{}
-		var eggID interface{}
-		var eggName, nestName interface{}
+		var pterodactylId *int
+		var uuid, ownerID, ownerEmail, ownerUsername *string
+		var nodeID *int
+		var nodeName, nodeFQDN *string
+		var eggID *int
+		var eggName, nestName *string
+		var createdAt, updatedAt time.Time
 
 		err := rows.Scan(
-			&server.ID,
-			&server.Name,
-			&server.Description,
-			&server.Status,
-			&server.IsSuspended,
-			&ownerID,
-			&ownerEmail,
-			&ownerUsername,
-			&nodeID,
-			&nodeName,
-			&nodeFQDN,
-			&eggID,
-			&eggName,
-			&nestName,
-			&server.Memory,
-			&server.Disk,
-			&server.CPU,
-			&server.CreatedAt,
-			&server.UpdatedAt,
+			&server.ID, &server.ServerType, &pterodactylId, &uuid, &server.Name,
+			&server.Description, &server.Status, &server.IsSuspended,
+			&server.Memory, &server.Disk, &server.CPU, &server.PanelType,
+			&createdAt, &updatedAt,
+			&ownerID, &ownerEmail, &ownerUsername,
+			&nodeID, &nodeName, &nodeFQDN,
+			&eggID, &eggName, &nestName,
 		)
 		if err != nil {
+			log.Warn().Err(err).Msg("Failed to scan server row")
 			continue
 		}
 
-		// Map owner info
+		if pterodactylId != nil {
+			server.PterodactylID = *pterodactylId
+		}
+		if uuid != nil {
+			server.UUID = *uuid
+		}
+		server.CreatedAt = createdAt.Format(time.RFC3339)
+		server.UpdatedAt = updatedAt.Format(time.RFC3339)
+
 		if ownerID != nil {
 			server.Owner = &OwnerInfo{
-				ID:       ownerID.(string),
-				Email:    ownerEmail.(string),
-				Username: ownerUsername.(string),
+				ID:       *ownerID,
+				Email:    *ownerEmail,
+				Username: *ownerUsername,
 			}
 		}
-
-		// Map node info
 		if nodeID != nil {
 			server.Node = &NodeInfo{
-				ID:   nodeID.(int),
-				Name: nodeName.(string),
-				FQDN: nodeFQDN.(string),
+				ID:   *nodeID,
+				Name: *nodeName,
+				FQDN: *nodeFQDN,
 			}
 		}
-
-		// Map egg info
 		if eggID != nil {
+			nest := ""
+			if nestName != nil {
+				nest = *nestName
+			}
 			server.Egg = &EggInfo{
-				ID:   eggID.(int),
-				Name: eggName.(string),
-				Nest: nestName.(string),
+				ID:   *eggID,
+				Name: *eggName,
+				Nest: nest,
 			}
 		}
 
 		servers = append(servers, server)
 	}
 
-	// Calculate pagination info
 	totalPages := (totalCount + req.PageSize - 1) / req.PageSize
-
 	return c.JSON(fiber.Map{
-		"data": fiber.Map{
-			"servers": servers,
-			"pagination": fiber.Map{
-				"page":       req.Page,
-				"pageSize":   req.PageSize,
-				"total":      totalCount,
-				"totalPages": totalPages,
-			},
+		"success": true,
+		"servers": servers,
+		"pagination": fiber.Map{
+			"page":       req.Page,
+			"pageSize":   req.PageSize,
+			"total":      totalCount,
+			"totalPages": totalPages,
 		},
 	})
 }

@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS servers (
     "virtfusionId" INTEGER UNIQUE,
     uuid TEXT UNIQUE, -- nullable for non-Pterodactyl servers
     "uuidShort" TEXT,
-    "externalId" TEXT UNIQUE,
+    "externalId" TEXT, -- not unique: Pterodactyl does not guarantee uniqueness
     
     -- Panel integration details (specific to serverType)
     "panelType" TEXT DEFAULT 'pterodactyl', -- pterodactyl, proxmox, cPanel, etc.
@@ -30,10 +30,15 @@ CREATE TABLE IF NOT EXISTS servers (
     -- Server state
     status TEXT DEFAULT 'installing', -- installing, online, offline, suspended, error
     "isSuspended" BOOLEAN DEFAULT false,
+
+    -- Resource limits (from Pterodactyl panel)
+    memory INTEGER DEFAULT 0,   -- Memory limit in MB
+    disk INTEGER DEFAULT 0,     -- Disk limit in MB
+    cpu INTEGER DEFAULT 0,      -- CPU limit in % (0 = unlimited)
     
     -- Product and location
     "productId" TEXT REFERENCES products(id) ON DELETE SET NULL,
-    "ownerId" TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    "ownerId" TEXT REFERENCES users(id) ON DELETE CASCADE, -- nullable: reconciled after users sync
     "nodeId" INTEGER REFERENCES nodes(id) ON DELETE SET NULL, -- nullable for non-panel servers
     
     -- Server-type-specific configuration stored as JSON

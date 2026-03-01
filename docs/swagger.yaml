@@ -229,11 +229,17 @@ definitions:
     type: object
   handlers.UpdateUserAccountRequest:
     properties:
+      billingEmail:
+        type: string
+      companyName:
+        type: string
       email:
         type: string
       firstName:
         type: string
       lastName:
+        type: string
+      phoneNumber:
         type: string
       username:
         type: string
@@ -561,6 +567,207 @@ info:
   title: NodeByte API
   version: 0.2.0
 paths:
+  /api/admin/allocations:
+    get:
+      description: Returns paginated allocations across all nodes with filtering by
+        assignment status, node, and IP/alias search
+      parameters:
+      - default: all
+        description: Filter by assignment status
+        enum:
+        - all
+        - "yes"
+        - "no"
+        in: query
+        name: assigned
+        type: string
+      - description: Filter by node ID
+        in: query
+        name: nodeId
+        type: string
+      - description: Search by IP, alias, or port
+        in: query
+        name: search
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Items per page
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Allocations list with pagination
+          schema:
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: object
+      security:
+      - Bearer: []
+      summary: List all allocations
+      tags:
+      - Admin Nodes
+  /api/admin/locations:
+    get:
+      description: Returns all Pterodactyl panel locations with their node counts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Locations list
+          schema:
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: object
+      security:
+      - Bearer: []
+      summary: List all locations
+      tags:
+      - Admin Nodes
+  /api/admin/nodes:
+    get:
+      description: Returns a paginated list of all server nodes with location info,
+        server counts, and allocation counts
+      parameters:
+      - description: Search by name or FQDN
+        in: query
+        name: search
+        type: string
+      - default: all
+        description: Filter by maintenance mode
+        enum:
+        - all
+        - "yes"
+        - "no"
+        in: query
+        name: maintenance
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 25
+        description: Items per page
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Nodes list with pagination
+          schema:
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: object
+      security:
+      - Bearer: []
+      summary: List all nodes
+      tags:
+      - Admin Nodes
+  /api/admin/nodes/{id}/allocations:
+    get:
+      description: Returns paginated allocations for a specific node with optional
+        assigned filter
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: all
+        description: Filter by assignment status
+        enum:
+        - all
+        - "yes"
+        - "no"
+        in: query
+        name: assigned
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Items per page
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Allocations list with pagination
+          schema:
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: object
+      security:
+      - Bearer: []
+      summary: Get node allocations
+      tags:
+      - Admin Nodes
+  /api/admin/nodes/{id}/maintenance:
+    post:
+      description: Toggles the maintenance mode flag on a specific node
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Maintenance mode toggled
+          schema:
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: object
+      security:
+      - Bearer: []
+      summary: Toggle node maintenance mode
+      tags:
+      - Admin Nodes
   /api/admin/settings:
     get:
       description: Returns all configuration from Config table and Discord webhooks
@@ -1194,6 +1401,27 @@ paths:
       summary: Update sync settings (admin)
       tags:
       - Admin
+  /api/admin/sync/stream/{id}:
+    get:
+      description: Streams live sync log updates as Server-Sent Events until the sync
+        reaches a terminal state
+      parameters:
+      - description: Sync log ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Bearer JWT token
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - text/event-stream
+      responses: {}
+      summary: Stream sync progress (SSE)
+      tags:
+      - Admin
   /api/panel/counts:
     get:
       consumes:
@@ -1705,6 +1933,48 @@ paths:
       summary: Update user account
       tags:
       - Dashboard
+  /api/v1/dashboard/account/change-email:
+    post:
+      consumes:
+      - application/json
+      description: Changes the user's email address. Requires current password for
+        verification. Clears email verification status and sends a verification email
+        to the new address.
+      parameters:
+      - description: Email change request
+        in: body
+        name: payload
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email updated
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Missing required fields
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized or wrong password
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Email already in use
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Request email change
+      tags:
+      - Dashboard
   /api/v1/dashboard/account/password:
     put:
       consumes:
@@ -1739,6 +2009,34 @@ paths:
       security:
       - BearerAuth: []
       summary: Change user password
+      tags:
+      - Dashboard
+  /api/v1/dashboard/account/resend-verification:
+    post:
+      description: Resends the email verification email for the authenticated user.
+        Fails if email is already verified.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Verification email sent
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Email already verified
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Resend verification email
       tags:
       - Dashboard
   /api/v1/dashboard/servers:
