@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/nodebyte/backend/internal/crypto"
 	"github.com/nodebyte/backend/internal/database"
@@ -27,7 +28,7 @@ type Config struct {
 	APIKey string
 
 	// CORS
-	CORSOrigins string
+	CORSOrigins []string
 
 	// Pterodactyl Panel
 	PterodactylURL          string
@@ -68,7 +69,7 @@ func Load() (*Config, error) {
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		RedisURL:    getEnv("REDIS_URL", "localhost:6379"),
 		APIKey:      os.Getenv("BACKEND_API_KEY"),
-		CORSOrigins: getEnv("CORS_ORIGINS", "*"),
+		CORSOrigins: parseCORSOrigins(getEnv("CORS_ORIGINS", "https://nodebyte.host")),
 
 		// Panel settings
 		PterodactylURL:          os.Getenv("PTERODACTYL_URL"),
@@ -129,6 +130,16 @@ func getEnvBool(key string, defaultValue bool) bool {
 		return value == "true" || value == "1" || value == "yes"
 	}
 	return defaultValue
+}
+
+func parseCORSOrigins(originsStr string) []string {
+	var origins []string
+	for _, origin := range strings.Split(originsStr, ",") {
+		if trimmed := strings.TrimSpace(origin); trimmed != "" {
+			origins = append(origins, trimmed)
+		}
+	}
+	return origins
 }
 
 // MergeFromDB loads configuration overrides from the `config` table in the
