@@ -140,10 +140,10 @@ func main() {
 		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
 	}))
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     cfg.CORSOrigins,
+		AllowOrigins:     "*",
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-API-Key",
 		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-		AllowCredentials: true,
+		AllowCredentials: false,
 	}))
 
 	// API key middleware for protected routes
