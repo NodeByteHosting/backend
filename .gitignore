@@ -49,3 +49,7 @@ logs/
 tmp/
 temp/
 *.tmp
+
+db
+migrate
+
