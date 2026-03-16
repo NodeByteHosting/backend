@@ -221,8 +221,12 @@ func setupMiddleware(app *fiber.App, sentryHandler fiber.Handler, cfg *config.Co
 	app.Use(logger.New(logger.Config{
 		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
 	}))
+
+	// Log CORS origins for debugging
+	log.Info().Strs("cors_origins", cfg.CORSOrigins).Msg("CORS configured with origins")
+
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     strings.Join(cfg.CORSOrigins, ","),
+		AllowOrigins:     strings.Join(cfg.CORSOrigins, ", "),
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-API-Key",
 		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS, PATCH",
 		AllowCredentials: true,
