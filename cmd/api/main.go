@@ -224,7 +224,6 @@ func setupMiddleware(app *fiber.App, sentryHandler fiber.Handler, cfg *config.Co
 		AllowOrigins:     cfg.CORSOrigins,
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-API-Key",
 		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-		AllowCredentials: true,
 	}))
 }
 

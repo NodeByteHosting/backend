@@ -13,13 +13,11 @@ func main() {
 		Long:  "Database initialization, migration, and management utility for NodeByte backend.",
 	}
 
-	// Add subcommands
 	rootCmd.AddCommand(InitCmd())
 	rootCmd.AddCommand(MigrateCmd())
 	rootCmd.AddCommand(ResetCmd())
 	rootCmd.AddCommand(ListCmd())
 
-	// Add global flags
 	rootCmd.PersistentFlags().StringP("database", "d", "", "PostgreSQL connection string (or set DATABASE_URL env var)")
 	rootCmd.PersistentFlags().String("schemas", "", "Path to schemas directory (optional)")
 

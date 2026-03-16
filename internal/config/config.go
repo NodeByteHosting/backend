@@ -68,7 +68,7 @@ func Load() (*Config, error) {
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		RedisURL:    getEnv("REDIS_URL", "localhost:6379"),
 		APIKey:      os.Getenv("BACKEND_API_KEY"),
-		CORSOrigins: getEnv("CORS_ORIGINS", "http://localhost:3000"),
+		CORSOrigins: getEnv("CORS_ORIGINS", "*"),
 
 		// Panel settings
 		PterodactylURL:          os.Getenv("PTERODACTYL_URL"),
