@@ -99,7 +99,9 @@ func TestLoad(t *testing.T) {
 			},
 			expectErr: false,
 			checkFn: func(cfg *Config) bool {
-				return cfg.CORSOrigins == "https://example.com,https://app.example.com"
+				return len(cfg.CORSOrigins) == 2 &&
+					cfg.CORSOrigins[0] == "https://example.com" &&
+					cfg.CORSOrigins[1] == "https://app.example.com"
 			},
 		},
 		{

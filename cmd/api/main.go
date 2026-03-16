@@ -22,6 +22,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -221,9 +222,10 @@ func setupMiddleware(app *fiber.App, sentryHandler fiber.Handler, cfg *config.Co
 		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
 	}))
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     cfg.CORSOrigins,
+		AllowOrigins:     strings.Join(cfg.CORSOrigins, ","),
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-API-Key",
 		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+		AllowCredentials: true,
 	}))
 }
 
