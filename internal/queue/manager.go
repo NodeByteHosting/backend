@@ -39,6 +39,16 @@ type Manager struct {
 	client *asynq.Client
 }
 
+// Close shuts down the underlying Asynq client, releasing any open
+// Redis connections. It is safe to call multiple times and will noop if
+// the manager or client is nil.
+func (m *Manager) Close() error {
+	if m == nil || m.client == nil {
+		return nil
+	}
+	return m.client.Close()
+}
+
 // NewManager creates a new queue manager
 func NewManager(client *asynq.Client) *Manager {
 	return &Manager{client: client}
